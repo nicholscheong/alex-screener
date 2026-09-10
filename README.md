@@ -14,9 +14,11 @@ Double-click **`Start Alex.bat`**. Your browser opens `http://127.0.0.1:8787` au
 Close the console window to stop the server.
 
 Manual start: open a terminal in this folder and run `python server.py`.
-(`PORT` and `HOST` can be overridden via env vars; `ALEX_AUTH="user:password"` adds HTTP Basic auth.)
+(`PORT` / `HOST` are read from env vars. Set `ALEX_TOKEN="a-secret"` to lock it
+down — the first visit must then be `<url>/?key=<token>`, which drops a cookie.)
 
-**Cloud deployment:** see [`DEPLOY.md`](DEPLOY.md) — a `Dockerfile` and `fly.toml` are included.
+**Cloud deployment:** see [`DEPLOY.md`](DEPLOY.md) — `Dockerfile`, `fly.toml` and
+`render.yaml` are included; the repo is already `git init`-ed.
 
 ## Layout
 

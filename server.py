@@ -19,7 +19,6 @@ import gzip
 import io
 import os
 import sys
-import base64
 import webbrowser
 
 # Windows consoles default to a legacy codepage (cp1252/936); printing anything
@@ -43,10 +42,11 @@ def log(*parts):
             pass
 
 # Local default is 127.0.0.1:8787. In the cloud, set PORT / HOST via env
-# (HOST=0.0.0.0). Set ALEX_AUTH="user:password" to require HTTP Basic auth.
+# (HOST=0.0.0.0). Set ALEX_TOKEN="some-secret" to lock it down: the first visit
+# must be  https://your-app/?key=<token>  (it drops a cookie and redirects).
 PORT = int(os.environ.get("PORT", "8787"))
 HOST = os.environ.get("HOST", "127.0.0.1")
-AUTH = os.environ.get("ALEX_AUTH", "").strip()
+TOKEN = os.environ.get("ALEX_TOKEN", "").strip()
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
@@ -301,19 +301,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, f.read(), ctype)
 
     def _authed(self):
-        if not AUTH:
+        if not TOKEN:
             return True
-        hdr = self.headers.get("Authorization", "")
-        if hdr.startswith("Basic "):
-            try:
-                if base64.b64decode(hdr[6:]).decode("utf-8", "replace") == AUTH:
-                    return True
-            except Exception:
-                pass
+        u = urllib.parse.urlparse(self.path)
+        if ("alex=" + TOKEN) in self.headers.get("Cookie", "").replace(" ", ""):
+            return True
+        # first visit: /...?key=<token>  -> set a cookie and redirect to a clean URL
+        if urllib.parse.parse_qs(u.query).get("key", [""])[0] == TOKEN:
+            secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+            self.send_response(302)
+            self.send_header("Set-Cookie",
+                             "alex=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000%s" % (TOKEN, secure))
+            self.send_header("Location", u.path or "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return False
+        msg = b"Alex is private. Open it once as this URL with  ?key=YOUR_TOKEN  appended."
         self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="Alex"')
-        self.send_header("Content-Length", "0")
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(msg)))
         self.end_headers()
+        try:
+            self.wfile.write(msg)
+        except Exception:
+            pass
         return False
 
     def do_GET(self):
