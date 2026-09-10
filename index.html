@@ -104,6 +104,9 @@
   .ind-quick{display:flex;flex-wrap:wrap;gap:5px;padding:3px 3px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
   .ind-quick button{font-size:11px;font-weight:500;padding:3px 9px;border-radius:var(--r-pill);background:var(--bg3);border:1px solid var(--line);color:var(--fg2);transition:border-color .12s,color .12s}
   .ind-quick button:hover{color:var(--fg);border-color:var(--accent-line)}
+  .ind-quick button.star,#indBar .clearAll.star{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-fg);font-weight:600}
+  .ind-quick button.star:hover,#indBar .clearAll.star:hover{background:color-mix(in srgb,var(--accent) 20%,var(--bg2));color:var(--accent-fg)}
+  #indBar .clearAll.star{font-size:11.5px;padding:4px 11px}
   .ind-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r);cursor:pointer;font-size:12.5px;color:var(--fg)}
   .ind-item:hover{background:var(--bg3)}
   .ind-item .box{width:15px;height:15px;border:1px solid var(--fg3);border-radius:var(--r-sm);flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;transition:background .12s,border-color .12s}
@@ -1066,6 +1069,8 @@ const IND_ALIAS = {
   analyst: ['analyst rating', 'recommendation', 'target price', 'rating'],
 };
 const PICKABLE = COLS.filter(c => !ALWAYS_COLS.includes(c.k) && c.k !== 'shapeSim');
+// a curated starter set — the metrics people actually screen on
+const COMMON_COLS = ['spark', 'mktCap', 'peTTM', 'pb', 'divYield', 'roe', 'revG', 'ret20', 'p:rsi:14', 'volRatio', 'signals'];
 function aliasesFor(c){
   return IND_ALIAS[c.k] || (c.pbase && PARAM_METRICS[c.pbase] ? PARAM_METRICS[c.pbase].alias : []) || [];
 }
@@ -1281,7 +1286,12 @@ function buildIndBar(){
   const anything = chosen.length || state.sectorFilter.length || state.sigFilter.length ||
                    Object.keys(state.filters).length || state.shapeQuery;
   if (!chosen.length && !state.shapeQuery){
-    bar.appendChild(el('span', 'hint', 'Find a metric under "+ Add a metric", click to add it, then type a min / max here to screen by range (turnover, range, P/E, RSI, ROE…; percentages are plain numbers, 5 = 5%). Market cap / dollar volume accept 10B, 500M. Click a header to sort.'));
+    const cb = el('button', 'clearAll star', '★ Common metrics');
+    cb.style.marginLeft = '0';
+    cb.title = 'Add a curated starter set of the metrics people screen on most';
+    cb.onclick = () => addIndCols(COMMON_COLS);
+    bar.appendChild(cb);
+    bar.appendChild(el('span', 'hint', 'or search "+ Add a metric" to pick your own — then type a min / max here to screen by range (5 = 5%; market cap accepts 10B). Click a header to sort.'));
   }
   chosen.forEach(c => bar.appendChild(buildFilterCard(c)));
   if (anything){
@@ -1299,6 +1309,10 @@ function buildIndDrop(query){
   const drop = $('#indDrop');
   drop.innerHTML = '';
   const quick = el('div', 'ind-quick');
+  const common = el('button', 'star', '★ Common metrics');
+  common.title = 'Add a curated starter set: trend, size, P/E, P/B, yield, ROE, revenue growth, 20-day return, RSI, relative volume, signals';
+  common.onclick = e => { e.stopPropagation(); addIndCols(COMMON_COLS); };
+  quick.appendChild(common);
   [['Market', 'Market / Momentum'], ['Valuation', 'Valuation'], ['Financials', 'Financials'], ['Technicals', 'Technicals']].forEach(([g, lbl]) => {
     const b = el('button', null, '+ ' + lbl);
     b.onclick = e => {
