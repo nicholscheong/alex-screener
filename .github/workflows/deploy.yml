@@ -1,0 +1,25 @@
+# Auto-deploy to Fly.io on every push to main.
+# One-time setup (see DEPLOY.md → "Go fully cloud"):
+#   1. push this repo to a private GitHub repo
+#   2. fly tokens create deploy      (copy the token)
+#   3. GitHub repo → Settings → Secrets and variables → Actions → new secret
+#        FLY_API_TOKEN = <that token>
+# After that you can delete the local folder and edit files on github.com.
+name: Deploy to Fly
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
