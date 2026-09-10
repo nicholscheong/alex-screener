@@ -1,0 +1,8 @@
+.git
+.gitignore
+.fly
+__pycache__
+*.md
+*.bat
+fly.toml
+render.yaml

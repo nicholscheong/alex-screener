@@ -1,0 +1,26 @@
+# Fly.io config for Alex.
+# `app` names are globally unique — `fly launch` will prompt you to pick one.
+# Regions: nrt = Tokyo, hkg = Hong Kong, sjc = San Jose, iad = Virginia.
+app = "alex-screener"
+primary_region = "nrt"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero when idle → pay ~nothing; wakes in ~2-3s on the next request.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

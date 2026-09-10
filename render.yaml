@@ -1,0 +1,14 @@
+# Render Blueprint (方案 B). Push this folder to GitHub, then on render.com:
+# New → Blueprint → pick the repo. It reads this file.
+# After the first deploy, set ALEX_AUTH in the service's Environment tab
+# to "user:password" (kept out of git on purpose).
+services:
+  - type: web
+    name: alex-screener
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ALEX_AUTH
+        sync: false
