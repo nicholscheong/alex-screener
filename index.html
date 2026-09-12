@@ -25,6 +25,8 @@
     --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
+  /* any element with [hidden] must actually disappear, even if a class below also sets display */
+  [hidden]{display:none !important}
   html,body{margin:0;height:100%}
   body{background:var(--bg);color:var(--fg);font:13px/1.45 var(--font);overflow:hidden;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
   a{color:var(--accent);text-decoration:none}
@@ -229,55 +231,117 @@
   .dsig{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0}
   .backdrop{position:fixed;inset:0;background:rgba(4,6,10,.46);z-index:49;opacity:0;pointer-events:none;transition:opacity .2s}
   .backdrop.on{opacity:1;pointer-events:auto}
+
+  /* ---- saved screens (combo list / builder bar) ---- */
+  #comboScreen{display:flex;flex-direction:column;height:100%}
+  #comboScreen[hidden]{display:none}
+  #tableScreen{display:flex;flex-direction:column;height:100%}
+  #tableScreen[hidden]{display:none}
+  #comboBody{flex:1;overflow:auto;padding:44px 24px 64px}
+  .cs-wrap{max-width:720px;margin:0 auto}
+  .cs-head h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em;color:var(--fg)}
+  .cs-sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5}
+  #comboListWrap{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+  .cs-empty{padding:34px 20px;text-align:center;color:var(--fg3);font-size:13px;border:1px dashed var(--line-strong);border-radius:var(--r-lg)}
+  .cs-card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:border-color .12s,background .12s}
+  .cs-card:hover{border-color:var(--accent-line);background:var(--bg3)}
+  .cs-card-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .cs-name{font-size:14px;font-weight:600;color:var(--fg)}
+  .cs-del{margin-left:auto;background:none;border:none;color:var(--fg3);font-size:16px;line-height:1;padding:2px 5px;border-radius:var(--r-sm)}
+  .cs-del:hover{color:var(--down);background:var(--down-bg)}
+  .cs-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+  .cs-chip{display:inline-block;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r-pill);padding:2px 9px;font-size:11px}
+  .cs-meta{font-size:11px;color:var(--fg3)}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--accent);border:1px solid var(--accent);color:#08111f;border-radius:var(--r);padding:9px 16px;font-size:13px;font-weight:650}
+  .btn-primary:hover{background:#6ea0f8}
+  #comboBar{flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--bg1);border-bottom:1px solid var(--line)}
+  #comboBar .cb-name{font-size:12.5px;font-weight:600;color:var(--fg2)}
+  .logo{cursor:pointer}
+  .logo:hover{text-decoration:none}
+
+  /* ---- generic centered modal (name prompt) ---- */
+  .modal{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.62);backdrop-filter:blur(3px)}
+  .modal[hidden]{display:none}
+  #nameModal .sm-card{width:380px}
+  #nameModal input[type=text]{width:100%;height:36px;background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:var(--r);padding:0 11px;font:13px var(--font);margin-top:10px}
+  #nameModal input[type=text]:focus{border-color:var(--accent-line);background:var(--bg2);outline:none}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="logo"><span>Alex</span><small>Equity Screener</small></div>
-    <div class="mstat"><span class="dot" id="mdot"></span><span id="mtext">Connecting…</span></div>
-    <div class="grow"></div>
-    <div class="ctl">
-      <span class="ind-wrap">
-        <input type="search" id="indSearch" placeholder="+ Add a metric to screen on (P/E, ATR, RSI, ROE…)" autocomplete="off">
-        <div id="indDrop" hidden></div>
-      </span>
-      <button class="btn" id="shapeBtn">◧ Pattern Search</button>
-      <input type="search" id="search" placeholder="Search ticker / name">
-      <label>Refresh
-        <select id="interval">
-          <option value="0">Off</option>
-          <option value="10000">10s</option>
-          <option value="15000" selected>15s</option>
-          <option value="30000">30s</option>
-          <option value="60000">60s</option>
-        </select>
-      </label>
-      <button class="btn" id="refreshNow">↻ Now</button>
-      <button class="btn" id="exportCsv">Export CSV</button>
+  <div id="comboScreen">
+    <header>
+      <a class="logo" href="/"><span>Alex</span><small>Equity Screener</small></a>
+      <div class="grow"></div>
+      <a class="btn" href="/">⌂ Home</a>
+    </header>
+    <div id="comboBody">
+      <div class="cs-wrap">
+        <div class="cs-head">
+          <h1>Stock Screener</h1>
+          <p class="cs-sub">Saved indicator combinations. Open one to see the indicators and the stocks they select, or build a new one.</p>
+        </div>
+        <div id="comboListWrap"></div>
+        <button class="btn-primary" id="newComboBtn">+ New Screen</button>
+      </div>
     </div>
-  </header>
-
-  <div id="indBar"></div>
-
-  <div id="body">
-    <main id="tableWrap">
-      <div class="load" id="loadmsg">Loading the stock universe…</div>
-      <table id="tbl" hidden>
-        <thead><tr id="thead"></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </main>
   </div>
 
-  <div id="statusbar">
-    <span id="count">—</span>
-    <span id="tech">Technicals 0%</span>
-    <span id="fin"></span>
-    <div class="prog"><i id="progbar"></i></div>
-    <span class="grow"></span>
-    <span id="updated">—</span>
-    <span id="next"></span>
+  <div id="tableScreen" hidden>
+    <header>
+      <a class="logo" href="/"><span>Alex</span><small>Equity Screener</small></a>
+      <div class="mstat"><span class="dot" id="mdot"></span><span id="mtext">Connecting…</span></div>
+      <div class="grow"></div>
+      <div class="ctl">
+        <span class="ind-wrap">
+          <input type="search" id="indSearch" placeholder="+ Add a metric to screen on (P/E, ATR, RSI, ROE…)" autocomplete="off">
+          <div id="indDrop" hidden></div>
+        </span>
+        <button class="btn" id="shapeBtn">◧ Pattern Search</button>
+        <input type="search" id="search" placeholder="Search ticker / name">
+        <label>Refresh
+          <select id="interval">
+            <option value="0">Off</option>
+            <option value="10000">10s</option>
+            <option value="15000" selected>15s</option>
+            <option value="30000">30s</option>
+            <option value="60000">60s</option>
+          </select>
+        </label>
+        <button class="btn" id="refreshNow">↻ Now</button>
+        <button class="btn" id="exportCsv">Export CSV</button>
+      </div>
+    </header>
+
+    <div id="comboBar" hidden>
+      <button class="btn" id="backToCombos">← Back to Screens</button>
+      <span id="comboBarName" class="cb-name"></span>
+      <span class="grow"></span>
+      <button class="btn-primary" id="saveComboBtn" hidden>💾 Save Screen</button>
+    </div>
+
+    <div id="indBar"></div>
+
+    <div id="body">
+      <main id="tableWrap">
+        <div class="load" id="loadmsg">Loading the stock universe…</div>
+        <table id="tbl" hidden>
+          <thead><tr id="thead"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </main>
+    </div>
+
+    <div id="statusbar">
+      <span id="count">—</span>
+      <span id="tech">Technicals 0%</span>
+      <span id="fin"></span>
+      <div class="prog"><i id="progbar"></i></div>
+      <span class="grow"></span>
+      <span id="updated">—</span>
+      <span id="next"></span>
+    </div>
   </div>
 </div>
 
@@ -337,6 +401,19 @@
       <canvas id="cmBase"></canvas>
       <canvas id="cmOver"></canvas>
       <div class="cm-legend" id="cmLegend"></div>
+    </div>
+  </div>
+</div>
+
+<div id="nameModal" class="modal" hidden>
+  <div class="sm-card">
+    <button class="close" id="nameModalClose">×</button>
+    <h3>Name this screen</h3>
+    <div class="sub">Give this indicator combination a name so you can find it again from the Stock Screener list.</div>
+    <input type="text" id="comboNameInput" placeholder="e.g. Oversold blue chips" maxlength="60">
+    <div class="modal-actions">
+      <button class="btn" id="comboNameCancel">Cancel</button>
+      <button class="btn-primary" id="comboNameSave">Save</button>
     </div>
   </div>
 </div>
@@ -512,7 +589,9 @@ const state = {
   sectorFilter: LS.get('sectors', []),
   sigFilter: LS.get('signals', []),
   shapeQuery: null,     // { curve:[0..1]*64, curveZ, win, thumb }  — set by Pattern Search
-  timer: null
+  timer: null,
+  screen: 'combos',      // 'combos' (saved-screen list) or 'table' (the screener itself)
+  activeComboId: null    // id of the saved screen currently open, null while building a new one
 };
 const ALWAYS_COLS = ['symbol', 'name', 'price', 'chgPct'];
 
@@ -1448,6 +1527,128 @@ function paramPickRow(base, presetNum){
 function openIndDrop(){ buildIndDrop($('#indSearch').value.trim()); $('#indDrop').hidden = false; }
 function closeIndDrop(){ $('#indDrop').hidden = true; }
 
+//////////////////// saved screens (indicator combos) ////////////////////
+// A "combo" is a named snapshot of the same state the ad-hoc screener already
+// drives itself from: which metric columns are shown, their range filters, and
+// the sector / signal picks. Opening one just loads that snapshot into `state`
+// and reuses the normal table view — building one is the normal metric picker
+// with a name-and-save step at the end.
+function loadCombos(){ const c = LS.get('combos', []); return Array.isArray(c) ? c : []; }
+function saveCombosList(list){ LS.set('combos', list); }
+function snapshotState(){
+  return {
+    visibleCols: state.visibleCols.slice(),
+    filters: JSON.parse(JSON.stringify(state.filters)),
+    sectorFilter: state.sectorFilter.slice(),
+    sigFilter: state.sigFilter.slice(),
+    sortKey: state.sortKey,
+    sortDir: state.sortDir,
+  };
+}
+function applySnapshot(snap){
+  state.visibleCols = (snap.visibleCols || []).slice();
+  state.filters = JSON.parse(JSON.stringify(snap.filters || {}));
+  state.sectorFilter = (snap.sectorFilter || []).slice();
+  state.sigFilter = (snap.sigFilter || []).slice();
+  state.sortKey = snap.sortKey || 'chgPct';
+  state.sortDir = snap.sortDir != null ? snap.sortDir : -1;
+}
+function deleteCombo(id){
+  saveCombosList(loadCombos().filter(c => c.id !== id));
+  renderComboList();
+}
+function renderComboList(){
+  const wrap = $('#comboListWrap');
+  wrap.innerHTML = '';
+  const combos = loadCombos().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (!combos.length){
+    wrap.appendChild(el('div', 'cs-empty', 'No saved screens yet — click "+ New Screen" below to build your first one.'));
+    return;
+  }
+  combos.forEach(c => {
+    const card = el('div', 'cs-card');
+    const head = el('div', 'cs-card-head');
+    head.appendChild(el('span', 'cs-name', c.name));
+    const del = el('button', 'cs-del', '×');
+    del.title = 'Delete this screen';
+    del.onclick = e => { e.stopPropagation(); if (confirm(`Delete "${c.name}"?`)) deleteCombo(c.id); };
+    head.appendChild(del);
+    card.appendChild(head);
+
+    const chips = el('div', 'cs-chips');
+    const cols = c.visibleCols || [];
+    cols.slice(0, 8).forEach(k => {
+      const col = colByKey(k);
+      if (col) chips.appendChild(el('span', 'cs-chip', col.t));
+    });
+    (c.sigFilter || []).forEach(sk => {
+      const s = SIGNALS.find(x => x[0] === sk);
+      if (s) chips.appendChild(el('span', 'cs-chip', s[1].replace(/\s*\(.*?\)/, '')));
+    });
+    if (cols.length > 8) chips.appendChild(el('span', 'cs-chip', '+' + (cols.length - 8) + ' more'));
+    if (!chips.children.length) chips.appendChild(el('span', 'cs-chip', 'No indicators yet'));
+    card.appendChild(chips);
+
+    const n = cols.length + (c.sigFilter || []).length;
+    card.appendChild(el('div', 'cs-meta', `${n} indicator${n === 1 ? '' : 's'} · saved ${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}`));
+    card.onclick = () => openCombo(c.id);
+    wrap.appendChild(card);
+  });
+}
+function showComboScreen(){
+  state.screen = 'combos';
+  $('#tableScreen').hidden = true;
+  $('#comboScreen').hidden = false;
+  renderComboList();
+}
+function showTableScreen(){
+  state.screen = 'table';
+  $('#comboScreen').hidden = true;
+  $('#tableScreen').hidden = false;
+}
+function openCombo(id){
+  const c = loadCombos().find(x => x.id === id);
+  if (!c) return;
+  applySnapshot(c);
+  state.activeComboId = id;
+  $('#comboBarName').textContent = c.name;
+  $('#saveComboBtn').hidden = true;
+  $('#comboBar').hidden = false;
+  showTableScreen();
+  afterIndChange();
+}
+function startNewCombo(){
+  clearIndCols();
+  state.activeComboId = null;
+  $('#comboBarName').textContent = 'New screen (unsaved)';
+  $('#saveComboBtn').hidden = false;
+  $('#comboBar').hidden = false;
+  showTableScreen();
+  setTimeout(() => { $('#indSearch').focus(); openIndDrop(); }, 0);
+}
+function backToCombos(){
+  if (state.activeComboId == null && state.visibleCols.length && !confirm('Discard this unsaved screen?')) return;
+  showComboScreen();
+}
+function openNameModal(){
+  $('#comboNameInput').value = '';
+  $('#nameModal').hidden = false;
+  setTimeout(() => $('#comboNameInput').focus(), 0);
+}
+function closeNameModal(){ $('#nameModal').hidden = true; }
+function confirmSaveCombo(){
+  const name = $('#comboNameInput').value.trim();
+  if (!name){ $('#comboNameInput').focus(); return; }
+  const combo = Object.assign(
+    { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name, createdAt: Date.now() },
+    snapshotState()
+  );
+  const list = loadCombos(); list.push(combo); saveCombosList(list);
+  closeNameModal();
+  state.activeComboId = combo.id;
+  showComboScreen();
+}
+
 //////////////////// spark svg ////////////////////
 function sparkSVG(arr){
   if (!arr || arr.length < 2) return '';
@@ -2039,6 +2240,19 @@ async function init(){
   }
   persist();   // write back any migrated / cleaned state
 
+  $('#newComboBtn').onclick = startNewCombo;
+  $('#backToCombos').onclick = backToCombos;
+  $('#saveComboBtn').onclick = openNameModal;
+  $('#nameModalClose').onclick = closeNameModal;
+  $('#comboNameCancel').onclick = closeNameModal;
+  $('#comboNameSave').onclick = confirmSaveCombo;
+  $('#comboNameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); confirmSaveCombo(); }
+    if (e.key === 'Escape') closeNameModal();
+  });
+  renderComboList();
+  showComboScreen();
+
   $('#refreshNow').onclick = () => loadQuotes().then(queueEnrichVisible);
   $('#exportCsv').onclick = exportCsv;
   $('#interval').onchange = scheduleRefresh;
@@ -2046,6 +2260,7 @@ async function init(){
   $('#backdrop').onclick = closeDrawer;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    if (!$('#nameModal').hidden){ closeNameModal(); return; }
     if (!$('#chartModal').hidden){ closeChartModal(); return; }
     if (!$('#shapeModal').hidden) return;   // shape modal handles its own Escape
     closeDrawer();

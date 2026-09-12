@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25;
+    --line:#1f2531; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d;
+    --accent:#5b93f6; --accent-fg:#d7e6ff; --accent-bg:#16233c; --accent-line:#31496f;
+    --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;min-height:100%}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg)}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  .logo small{font:600 9.5px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-left:2px}
+
+  main{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 20px}
+  .wrap{max-width:760px;width:100%}
+  .hero h1{margin:0 0 8px;font-size:28px;font-weight:650;letter-spacing:-.015em;color:var(--fg)}
+  .hero p{margin:0 0 34px;color:var(--fg2);font-size:14px;line-height:1.6;max-width:520px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+  .card{display:block;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;text-decoration:none;color:inherit;transition:border-color .12s,background .12s,transform .12s}
+  a.card:hover{border-color:var(--accent-line);background:var(--bg3);transform:translateY(-1px)}
+  .card .ic{font-size:22px;margin-bottom:12px;display:block}
+  .card h2{margin:0 0 6px;font-size:15px;font-weight:600;color:var(--fg)}
+  .card p{margin:0;font-size:12px;color:var(--fg3);line-height:1.5}
+  .card.soon{opacity:.5;cursor:default}
+  .card.soon:hover{border-color:var(--line);background:var(--bg2);transform:none}
+  .badge{display:inline-block;margin-top:10px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span>Alex</span><small>Home</small></div>
+</header>
+<main>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Alex</h1>
+      <p>Your personal equity tools. Pick a module below to get started — more will show up here over time.</p>
+    </div>
+    <div class="grid">
+      <a class="card" href="/screener">
+        <span class="ic">📊</span>
+        <h2>Stock Screener</h2>
+        <p>Screen the S&amp;P 500 by valuation, financials and technicals. Save your favorite indicator combinations and reopen them anytime.</p>
+      </a>
+      <div class="card soon">
+        <span class="ic">✦</span>
+        <h2>More tools</h2>
+        <p>Additional modules will appear here as they're built.</p>
+        <span class="badge">Coming soon</span>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

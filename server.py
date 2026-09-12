@@ -334,7 +334,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if route != "/api/health" and not self._authed():
             return
         try:
-            if route in ("/", "/index.html"):
+            if route in ("/", "/home.html"):
+                return self._file("home.html", "text/html; charset=utf-8")
+            if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
                 return self._file("universe.json", "application/json; charset=utf-8")
