@@ -118,6 +118,7 @@
   .ind-item .gt{margin-left:auto;font:600 8.5px/1.4 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);padding:1px 5px;border-radius:var(--r-sm);flex:none}
   .ind-empty{padding:16px;text-align:center;color:var(--fg3);font-size:12px}
   .ind-param{flex-wrap:wrap;cursor:default}
+  .ind-param.collapsed{cursor:pointer}
   .ind-param:hover{background:var(--bg3)}
   .ind-param .pname{font-weight:600;display:flex;align-items:center;gap:4px}
   .ind-param .plabel{font:600 9px/1 var(--font);letter-spacing:.07em;text-transform:uppercase;color:var(--fg3)}
@@ -1507,13 +1508,22 @@ function evalMacdCond(row, cond){
   if (cond.op === 'crossBelow') return pa >= pb && a < b;
   return null;
 }
+// picker rows for period-tunable metrics / MACD start collapsed (name only) — click to
+// reveal the parameter inputs, same as clicking any other row. Cleared each time the
+// search box is freshly opened so it doesn't carry stale expansion state between visits.
+const expandedPickers = new Set();
 function macdBuilderRow(){
-  const item = el('div', 'ind-item ind-param ind-macd');
+  const expand = expandedPickers.has('macd');
+  const item = el('div', 'ind-item ind-param ind-macd' + (expand ? '' : ' collapsed'));
   const nm = el('span', 'pname');
   nm.appendChild(document.createTextNode('MACD'));
   nm.appendChild(el('span', 'sub', 'custom condition, any timeframe'));
   item.appendChild(nm);
   item.appendChild(el('span', 'gt', 'Technicals'));
+  if (!expand){
+    item.onclick = e => { e.stopPropagation(); expandedPickers.add('macd'); buildIndDrop($('#indSearch').value.trim()); };
+    return item;
+  }
 
   const form = el('div', 'macd-form');
   form.onclick = e => e.stopPropagation();
@@ -1580,11 +1590,18 @@ function macdBuilderRow(){
 // a picker row for a period-tunable metric: name + a number box you type into + Add
 function paramPickRow(base, presetNum){
   const meta = PARAM_METRICS[base];
-  const item = el('div', 'ind-item ind-param');
+  if (presetNum != null) expandedPickers.add(base);   // "rsi 9" in the search box implies "show it"
+  const expand = expandedPickers.has(base);
+  const item = el('div', 'ind-item ind-param' + (expand ? '' : ' collapsed'));
   const nm = el('span', 'pname');
   nm.appendChild(document.createTextNode(meta.name));
   if (meta.alias[0]) nm.appendChild(el('span', 'sub', meta.alias[0]));
   item.appendChild(nm);
+  if (!expand){
+    item.appendChild(el('span', 'gt', meta.g));
+    item.onclick = e => { e.stopPropagation(); expandedPickers.add(base); buildIndDrop($('#indSearch').value.trim()); };
+    return item;
+  }
 
   const inp = el('input', 'pnum');
   inp.type = 'number'; inp.min = 2; inp.max = 400; inp.step = 1;
@@ -2453,7 +2470,7 @@ async function init(){
 
   // indicator search / column picker
   const indS = $('#indSearch');
-  indS.addEventListener('focus', openIndDrop);
+  indS.addEventListener('focus', () => { expandedPickers.clear(); openIndDrop(); });
   indS.addEventListener('input', () => openIndDrop());
   indS.addEventListener('keydown', e => {
     if (e.key === 'Escape'){ closeIndDrop(); indS.blur(); }
