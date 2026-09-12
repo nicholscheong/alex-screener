@@ -1,0 +1,17 @@
+﻿{
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Bash(flyctl status:*)",
+      "Bash(flyctl logs:*)",
+      "Bash(netstat:*)",
+      "Bash(git push:*)"
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Bash(flyctl deploy:*)",
+      "Bash(flyctl secrets:*)"
+    ],
+    "hard_deny": []
+  }
+}
