@@ -2,7 +2,7 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY server.py home.html index.html universe.json ./
+COPY server.py home.html index.html universe.json favicon.ico ./
 
 # Cloud: listen on all interfaces; the platform routes to this port.
 ENV HOST=0.0.0.0 PORT=8080

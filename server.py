@@ -341,7 +341,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if route == "/universe.json":
                 return self._file("universe.json", "application/json; charset=utf-8")
             if route == "/favicon.ico":
-                return self._send(204, b"", "image/x-icon")
+                return self._file("favicon.ico", "image/x-icon")
 
             if route == "/api/health":
                 try:
