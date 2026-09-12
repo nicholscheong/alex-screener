@@ -264,6 +264,7 @@ def fetch_enrich(symbol):
             "recommendationMean": g(fd, "recommendationMean"),
             "payoutRatio": g(sd, "payoutRatio"),
             "fiftyTwoWeekChange": g(ks, "52WeekChange"),
+            "floatShares": g(ks, "floatShares"),
         }
         cache_put(key, out)
         return out

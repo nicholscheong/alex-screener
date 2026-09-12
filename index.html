@@ -637,6 +637,9 @@ const COLS = [
   { k: 'distLo', t: 'Off 52W L', g: 'Market', fmt: r => pct(r.distLo52q), sort: r => r.distLo52q },
 
   { k: 'mktCap', t: 'Mkt cap', g: 'Valuation', fmt: r => fmtBig(r.mktCap), sort: r => r.mktCap },
+  { k: 'sharesOut', t: 'Shares out', g: 'Valuation', fmt: r => fmtBig(r.shares), sort: r => r.shares },
+  { k: 'floatShares', t: 'Free float', g: 'Valuation', fmt: r => fmtBig(e_(r, 'floatShares')), sort: r => e_(r, 'floatShares') },
+  { k: 'floatCap', t: 'Float cap', g: 'Valuation', fmt: r => fmtBig(floatCap(r)), sort: r => floatCap(r) },
   { k: 'peTTM', t: 'P/E (TTM)', g: 'Valuation', fmt: r => nf(r.peTTM, 1), sort: r => r.peTTM },
   { k: 'peFwd', t: 'Fwd P/E', g: 'Valuation', fmt: r => nf(r.peFwd, 1), sort: r => r.peFwd },
   { k: 'pb', t: 'P/B', g: 'Valuation', fmt: r => nf(r.pb, 2), sort: r => r.pb },
@@ -667,6 +670,7 @@ const COLS = [
 ];
 const t_ = (r, k) => r.tech ? r.tech[k] : null;
 const e_ = (r, k) => r.enrich ? r.enrich[k] : null;
+const floatCap = r => { const f = e_(r, 'floatShares'); return (f != null && r.price != null) ? f * r.price : null; };
 const sgn = v => v == null || isNaN(v) ? '' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
 
 //////////////////// period-tunable technicals ////////////////////
@@ -792,11 +796,11 @@ const FUNIT = {
   price: '$', chgPct: '%', amp: '%', turnover: '%', divYield: '%', payout: '%',
   ret5: '%', ret20: '%', ret60: '%', retYTD: '%', w52c: '%', distHi: '%', distLo: '%',
   roe: '%', roa: '%', gm: '%', om: '%', npm: '%', revG: '%', earnG: '%',
-  mktCap: '$', amount: '$', volume: 'sh',
+  mktCap: '$', amount: '$', volume: 'sh', sharesOut: 'sh', floatShares: 'sh', floatCap: '$',
 };
 // enrichment-backed keys — filtering / showing any of these forces a full-universe enrich
 const ENRICH_KEYS = new Set(['ps', 'peg', 'payout', 'roe', 'roa', 'gm', 'om', 'npm',
-                             'revG', 'earnG', 'd2e', 'curRatio', 'beta']);
+                             'revG', 'earnG', 'd2e', 'curRatio', 'beta', 'floatShares', 'floatCap']);
 
 // parse "12", "3.5", "10B", "500m", "1.2T" -> number (null if not a number)
 function parseAmt(s){
