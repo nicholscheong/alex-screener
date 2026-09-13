@@ -309,28 +309,36 @@ _FIRM_NAME = os.environ.get("OPEND_SECURITY_FIRM", "FUTUSECURITIES")
 _TRD_MARKET_NAME = os.environ.get("OPEND_TRD_MARKET", "US")
 
 
-def fetch_positions():
+def _open_trd_ctx():
+    """Open an OpenSecTradeContext, or raise with a message fit to show the user."""
     if not _HAS_FUTU:
-        return {"connected": False,
-                "error": "futu-api is not installed. Run:  pip install futu-api"}
+        raise RuntimeError("futu-api is not installed. Run:  pip install futu-api")
     try:
         firm = getattr(SecurityFirm, _FIRM_NAME, SecurityFirm.FUTUSECURITIES)
         market = getattr(TrdMarket, _TRD_MARKET_NAME, TrdMarket.US)
-        trd_ctx = OpenSecTradeContext(filter_trdmarket=market, host=OPEND_HOST, port=OPEND_PORT, security_firm=firm)
+        return OpenSecTradeContext(filter_trdmarket=market, host=OPEND_HOST, port=OPEND_PORT, security_firm=firm)
     except Exception as e:
-        return {"connected": False, "error": "Could not reach OpenD at %s:%d — is it running? (%s)"
-                                              % (OPEND_HOST, OPEND_PORT, e)}
+        raise RuntimeError("Could not reach OpenD at %s:%d — is it running? (%s)" % (OPEND_HOST, OPEND_PORT, e))
+
+
+def _get_accounts(trd_ctx):
+    """List the accounts (trd_env/acc_id pairs) OpenD exposes — a moomoo login can
+    have a real account, a paper/simulate account, or both, so callers should loop
+    over these rather than assuming TrdEnv.REAL."""
+    ret, accs = trd_ctx.get_acc_list()
+    if ret != 0:
+        raise RuntimeError(str(accs))
+    return accs.to_dict("records") if hasattr(accs, "to_dict") else list(accs)
+
+
+def fetch_positions():
     try:
-        # Positions live under a specific (trd_env, acc_id) pair — moomoo logins
-        # can have a real account, a paper/simulate account, or both. Ask OpenD
-        # what accounts actually exist rather than assuming TrdEnv.REAL, so this
-        # works whether the account behind OpenD is real money or paper trading.
-        ret, accs = trd_ctx.get_acc_list()
-        if ret != 0:
-            return {"connected": False, "error": str(accs)}
-        acc_rows = accs.to_dict("records") if hasattr(accs, "to_dict") else list(accs)
+        trd_ctx = _open_trd_ctx()
+    except RuntimeError as e:
+        return {"connected": False, "error": str(e)}
+    try:
         positions = []
-        for acc in acc_rows:
+        for acc in _get_accounts(trd_ctx):
             ret, data = trd_ctx.position_list_query(trd_env=acc.get("trd_env"), acc_id=acc.get("acc_id"))
             if ret != 0:
                 continue
@@ -348,6 +356,40 @@ def fetch_positions():
                     "env": acc.get("trd_env"),
                 })
         return {"connected": True, "positions": positions}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+    finally:
+        try:
+            trd_ctx.close()
+        except Exception:
+            pass
+
+
+def fetch_assets():
+    try:
+        trd_ctx = _open_trd_ctx()
+    except RuntimeError as e:
+        return {"connected": False, "error": str(e)}
+    try:
+        assets = []
+        for acc in _get_accounts(trd_ctx):
+            ret, data = trd_ctx.accinfo_query(trd_env=acc.get("trd_env"), acc_id=acc.get("acc_id"), currency="USD")
+            if ret != 0:
+                continue
+            rows = data.to_dict("records") if hasattr(data, "to_dict") else list(data)
+            for r in rows:
+                assets.append({
+                    "accId": acc.get("acc_id"),
+                    "env": acc.get("trd_env"),
+                    "totalAssets": r.get("total_assets"),
+                    "cash": r.get("cash"),
+                    "marketValue": r.get("market_val"),
+                    "longMv": r.get("long_mv"),
+                    "shortMv": r.get("short_mv"),
+                    "buyingPower": r.get("power"),
+                    "currency": "USD",
+                })
+        return {"connected": True, "assets": assets}
     except Exception as e:
         return {"connected": False, "error": str(e)}
     finally:
@@ -547,6 +589,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("home.html", "text/html; charset=utf-8")
             if route in ("/portfolio", "/portfolio.html"):
                 return self._file("portfolio.html", "text/html; charset=utf-8")
+            if route in ("/assets", "/assets.html"):
+                return self._file("assets.html", "text/html; charset=utf-8")
             if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
@@ -589,6 +633,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if route == "/api/positions":
                 return self._send(200, fetch_positions())
+
+            if route == "/api/assets":
+                return self._send(200, fetch_assets())
 
             if route == "/api/opend/setup":
                 if not _is_local_run():

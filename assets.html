@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25; --bg-hover:#14171f;
+    --line:#1f2531; --line2:#171b23; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d; --fg-mute:#3f4959;
+    --accent:#5b93f6; --accent-fg:#d7e6ff; --accent-bg:#16233c; --accent-line:#31496f;
+    --up:#26b58e; --down:#f05f6b; --flat:#7a8698;
+    --up-bg:rgba(38,181,142,.14); --down-bg:rgba(240,95,107,.14);
+    --r-sm:4px; --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;min-height:100%;font-variant-numeric:tabular-nums}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  .logo small{font:600 9.5px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-left:2px}
+  .grow{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;text-decoration:none}
+  .btn:hover{color:var(--fg);border-color:var(--line-strong);background:var(--bg2)}
+
+  main{flex:1;padding:32px 24px;max-width:980px;width:100%;margin:0 auto}
+  h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em}
+  .sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5;max-width:640px}
+  .badge-local{display:inline-flex;align-items:center;gap:5px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 9px;margin-left:8px;vertical-align:2px}
+  .badge-paper{display:inline-flex;align-items:center;gap:5px;font:600 9.5px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 9px;margin-left:8px;vertical-align:2px}
+
+  .setup{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 24px;max-width:640px}
+  .setup h2{margin:0 0 10px;font-size:14px}
+  .setup ol{margin:0 0 16px;padding-left:20px;color:var(--fg2);line-height:1.9}
+  .setup code{background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 6px;font:12px var(--mono);color:var(--accent-fg)}
+  .err{background:var(--down-bg);border:1px solid color-mix(in srgb,var(--down) 30%,transparent);color:var(--down);
+       border-radius:var(--r);padding:10px 12px;font:12px var(--mono);margin-bottom:16px;white-space:pre-wrap;word-break:break-word}
+
+  .acc{margin-bottom:28px}
+  .acc-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .acc-head h3{margin:0;font-size:13px;font-weight:650;color:var(--fg2)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px}
+  .card .k{font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);margin-bottom:8px}
+  .card .v{font-size:20px;font-weight:650}
+  .card.hl{border-color:var(--accent-line);background:var(--accent-bg)}
+  .card.hl .v{color:var(--accent-fg)}
+  .load{padding:60px 20px;text-align:center;color:var(--fg3)}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/"><span>Alex</span><small>Home</small></a>
+  <div class="grow"></div>
+  <a class="btn" href="/portfolio">Portfolio</a>
+  <a class="btn" href="/screener">Stock Screener</a>
+</header>
+<main>
+  <h1>Assets<span class="badge-local">Local only</span></h1>
+  <p class="sub">Your real moomoo account balances, read directly from your own machine via moomoo's official OpenD gateway.</p>
+  <div id="body"><div class="load">Connecting…</div></div>
+</main>
+
+<script>
+"use strict";
+function fmtNum(v, d){
+  if (v == null || isNaN(v)) return '–';
+  return Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function el(t, c, txt){ const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; }
+
+function renderSetup(err){
+  const body = document.getElementById('body');
+  body.innerHTML = '';
+  const wrap = el('div', 'setup');
+  wrap.appendChild(el('h2', null, 'Not connected'));
+  if (err) wrap.appendChild(el('div', 'err', err));
+  const ol = el('ol');
+  [
+    'Install the SDK on this machine:  pip install futu-api',
+    'Download moomoo’s official OpenD gateway from moomoo and sign in to your account inside it',
+    'Leave OpenD running (default port 11111), then reload this page',
+  ].forEach(step => { const li = el('li'); li.textContent = step; ol.appendChild(li); });
+  wrap.appendChild(ol);
+  const retry = el('button', 'btn', '↻ Retry');
+  retry.onclick = load;
+  wrap.appendChild(retry);
+  body.appendChild(wrap);
+}
+
+function renderAssets(assets){
+  const body = document.getElementById('body');
+  body.innerHTML = '';
+  if (!assets.length){
+    body.appendChild(el('div', 'load', 'No accounts found.'));
+    return;
+  }
+  assets.forEach(a => {
+    const acc = el('div', 'acc');
+    const head = el('div', 'acc-head');
+    head.appendChild(el('h3', null, 'Account ' + (a.accId || '')));
+    if (a.env === 'SIMULATE') head.appendChild(el('span', 'badge-paper', 'Paper'));
+    acc.appendChild(head);
+
+    const cards = el('div', 'cards');
+    const mk = (label, val, hl) => {
+      const c = el('div', 'card' + (hl ? ' hl' : ''));
+      c.appendChild(el('div', 'k', label));
+      c.appendChild(el('div', 'v', '$' + fmtNum(val, 2)));
+      return c;
+    };
+    cards.appendChild(mk('Total Assets', a.totalAssets, true));
+    cards.appendChild(mk('Cash', a.cash));
+    cards.appendChild(mk('Market Value', a.marketValue));
+    cards.appendChild(mk('Buying Power', a.buyingPower));
+    acc.appendChild(cards);
+    body.appendChild(acc);
+  });
+}
+
+async function load(){
+  document.getElementById('body').innerHTML = '<div class="load">Connecting…</div>';
+  try {
+    const r = await fetch('/api/assets');
+    const d = await r.json();
+    if (!d.connected) renderSetup(d.error || 'Not connected.');
+    else renderAssets(d.assets || []);
+  } catch(e){
+    renderSetup('Request failed: ' + e.message);
+  }
+}
+load();
+</script>
+</body>
+</html>
