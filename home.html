@@ -50,17 +50,6 @@
   .badge.ok{display:inline-block;margin-top:10px;font:600 11px/1 var(--font);color:var(--accent-fg);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:6px;padding:7px 10px;text-decoration:none}
   .badge.err{display:block;margin-top:10px;font:500 11.5px/1.5 var(--font);color:#f0a0a8;text-transform:none;letter-spacing:0;border:none;padding:0}
 
-  .btn{height:32px;padding:0 12px;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer}
-  .btn:hover{color:var(--fg);border-color:var(--line-strong)}
-  .btn-primary{height:32px;padding:0 14px;background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer}
-  .btn-primary:hover{filter:brightness(1.08)}
-  .btn-primary:disabled,.btn:disabled{opacity:.5;cursor:default}
-  .tg-form{display:flex;gap:8px;margin-top:4px}
-  .tg-form input{flex:1;min-width:0;height:32px;padding:0 10px;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);color:var(--fg);font-size:12px;font-family:var(--mono)}
-  .tg-form input:focus{outline:none;border-color:var(--accent-line)}
-  .tg-connected{display:flex;align-items:center;gap:10px;margin-top:4px}
-  .tg-connected .badge.ok{margin-top:0}
-
   /* ---- boot / welcome intro ---- */
   #intro{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;
          cursor:pointer;transition:opacity .5s ease;}
@@ -152,22 +141,11 @@
         </div>
         <a class="badge ok" id="connectDone" href="/portfolio" hidden>Connected — Open Portfolio →</a>
       </div>
-      <div class="card">
+      <a class="card" href="/telegram">
         <span class="ic">📨</span>
         <h2>Connect Telegram Bot</h2>
-        <p id="tgDesc">Send your screener results to a Telegram bot. Create one via <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, message it once, then paste its token below.</p>
-        <div class="tg-form" id="tgForm">
-          <input type="password" id="tgTokenInput" placeholder="Bot token" autocomplete="off">
-          <button class="btn-primary" id="tgConnectBtn">Connect</button>
-        </div>
-        <div class="connect-progress" id="tgProgress" hidden>
-          <span id="tgStatus"></span>
-        </div>
-        <div class="tg-connected" id="tgConnected" hidden>
-          <span class="badge ok" id="tgConnectedBadge"></span>
-          <button class="btn" id="tgDisconnectBtn">Disconnect</button>
-        </div>
-      </div>
+        <p>Push your screener results to a Telegram bot you create. Read-only, no trading.</p>
+      </a>
       <div class="card soon">
         <span class="ic">✦</span>
         <h2>More tools</h2>
@@ -359,76 +337,6 @@
   card.addEventListener('keydown', function(e){
     if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); }
   });
-})();
-
-(function(){
-  var form = document.getElementById('tgForm');
-  if (!form) return;
-  var tokenInput = document.getElementById('tgTokenInput');
-  var connectBtn = document.getElementById('tgConnectBtn');
-  var progress = document.getElementById('tgProgress');
-  var statusEl = document.getElementById('tgStatus');
-  var connected = document.getElementById('tgConnected');
-  var connectedBadge = document.getElementById('tgConnectedBadge');
-  var disconnectBtn = document.getElementById('tgDisconnectBtn');
-  var errEl = null;
-
-  function showError(msg){
-    progress.hidden = true;
-    form.hidden = false;
-    connectBtn.disabled = false;
-    if (!errEl){
-      errEl = document.createElement('div');
-      errEl.className = 'badge err';
-      form.parentNode.insertBefore(errEl, progress);
-    }
-    errEl.hidden = false;
-    errEl.textContent = msg;
-  }
-
-  function showConnected(botUsername){
-    if (errEl) errEl.hidden = true;
-    form.hidden = true;
-    progress.hidden = true;
-    connected.hidden = false;
-    connectedBadge.textContent = 'Connected to @' + botUsername;
-  }
-
-  function showForm(){
-    connected.hidden = true;
-    progress.hidden = true;
-    form.hidden = false;
-  }
-
-  function refreshStatus(){
-    fetch('/api/telegram/status').then(function(r){ return r.json(); }).then(function(s){
-      if (s.connected) showConnected(s.botUsername); else showForm();
-    }).catch(function(){});
-  }
-
-  function connect(){
-    var token = tokenInput.value.trim();
-    if (!token) { tokenInput.focus(); return; }
-    if (errEl) errEl.hidden = true;
-    form.hidden = true;
-    progress.hidden = false;
-    statusEl.textContent = 'Connecting...';
-    fetch('/api/telegram/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token })
-    }).then(function(r){ return r.json(); }).then(function(s){
-      if (s.connected){ tokenInput.value = ''; showConnected(s.botUsername); }
-      else showError(s.error || 'Could not connect.');
-    }).catch(function(e){ showError('Request failed: ' + e.message); });
-  }
-
-  connectBtn.addEventListener('click', connect);
-  tokenInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') connect(); });
-  disconnectBtn.addEventListener('click', function(){
-    fetch('/api/telegram/disconnect', { method: 'POST' }).then(showForm);
-  });
-  refreshStatus();
 })();
 </script>
 </body>

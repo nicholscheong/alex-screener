@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25; --bg-hover:#14171f;
+    --line:#1f2531; --line2:#171b23; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d; --fg-mute:#3f4959;
+    --accent:#5b93f6; --accent-fg:#d7e6ff; --accent-bg:#16233c; --accent-line:#31496f;
+    --up:#26b58e; --down:#f05f6b;
+    --r-sm:4px; --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;min-height:100%}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  .logo small{font:600 9.5px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-left:2px}
+  .grow{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;text-decoration:none}
+  .btn:hover{color:var(--fg);border-color:var(--line-strong);background:var(--bg2)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn-primary{height:32px;padding:0 16px;background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+
+  main{flex:1;padding:32px 24px;max-width:640px;width:100%;margin:0 auto}
+  h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em}
+  .sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5}
+
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px}
+  .panel h2{margin:0 0 14px;font-size:14px}
+  .steps{margin:0 0 22px;padding-left:0;list-style:none;counter-reset:step}
+  .steps li{counter-increment:step;position:relative;padding-left:34px;margin-bottom:14px;color:var(--fg2);line-height:1.6}
+  .steps li::before{content:counter(step);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:var(--bg3);border:1px solid var(--line-strong);color:var(--fg);font:600 11px/22px var(--font);text-align:center}
+  .steps a{color:var(--accent-fg)}
+  .steps code{background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 6px;font:12px var(--mono);color:var(--accent-fg)}
+
+  .form-row{display:flex;gap:8px}
+  .form-row input{flex:1;min-width:0;height:36px;padding:0 12px;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);color:var(--fg);font-size:12.5px;font-family:var(--mono)}
+  .form-row input:focus{outline:none;border-color:var(--accent-line)}
+
+  .status-line{margin-top:14px;font-size:12px;color:var(--fg3)}
+  .err{background:rgba(240,95,107,.14);border:1px solid rgba(240,95,107,.3);color:var(--down);
+       border-radius:var(--r);padding:10px 12px;font-size:12px;margin-top:14px;white-space:pre-wrap;word-break:break-word}
+
+  .connected-box{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .connected-box .who{display:flex;align-items:center;gap:10px}
+  .dot-ok{width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up)}
+  .connected-box .name{font-weight:650;font-size:14px}
+  .hint{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);color:var(--fg3);font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/"><span>Alex</span><small>Home</small></a>
+  <div class="grow"></div>
+  <a class="btn" href="/screener">Stock Screener</a>
+</header>
+<main>
+  <h1>Connect Telegram Bot</h1>
+  <p class="sub">Push your screener results to a Telegram bot. This only ever sends the text you already see on screen — it never trades and never will.</p>
+
+  <div class="panel" id="panel">
+    <div class="load">Loading…</div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const panel = document.getElementById('panel');
+
+function el(t, c, txt){ const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; }
+
+function renderSetupForm(err){
+  panel.innerHTML = '';
+  panel.appendChild((() => { const h = el('h2', null, 'Set up in three steps'); return h; })());
+  const steps = el('ol', 'steps');
+  const s1 = el('li'); s1.innerHTML = 'Open Telegram, message <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>, send <code>/newbot</code> and follow its prompts. It gives you a token.';
+  const s2 = el('li'); s2.innerHTML = 'Send any message to your new bot (so Telegram knows which chat to use — this is a one-time step).';
+  const s3 = el('li'); s3.textContent = 'Paste the token below and click Connect.';
+  steps.append(s1, s2, s3);
+  panel.appendChild(steps);
+
+  const row = el('div', 'form-row');
+  const input = el('input');
+  input.type = 'password'; input.placeholder = 'Bot token from @BotFather'; input.autocomplete = 'off';
+  const btn = el('button', 'btn-primary', 'Connect');
+  row.append(input, btn);
+  panel.appendChild(row);
+
+  const status = el('div', 'status-line');
+  panel.appendChild(status);
+
+  if (err){
+    const e = el('div', 'err', err);
+    panel.appendChild(e);
+  }
+
+  function connect(){
+    const token = input.value.trim();
+    if (!token){ input.focus(); return; }
+    btn.disabled = true; input.disabled = true;
+    status.textContent = 'Connecting…';
+    fetch('/api/telegram/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    }).then(r => r.json()).then(s => {
+      if (s.connected) renderConnected(s.botUsername);
+      else renderSetupForm(s.error || 'Could not connect.');
+    }).catch(e => renderSetupForm('Request failed: ' + e.message));
+  }
+  btn.addEventListener('click', connect);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+  input.focus();
+}
+
+function renderConnected(botUsername){
+  panel.innerHTML = '';
+  panel.appendChild((() => { const h = el('h2', null, 'Connected'); return h; })());
+  const box = el('div', 'connected-box');
+  const who = el('div', 'who');
+  who.appendChild(el('span', 'dot-ok'));
+  who.appendChild(el('span', 'name', '@' + botUsername));
+  box.appendChild(who);
+  const btn = el('button', 'btn', 'Disconnect');
+  btn.addEventListener('click', () => {
+    fetch('/api/telegram/disconnect', { method: 'POST' }).then(() => renderSetupForm());
+  });
+  box.appendChild(btn);
+  panel.appendChild(box);
+
+  const hint = el('div', 'hint');
+  hint.textContent = 'Open the Stock Screener and use the "📨 Send to Telegram" button to push your current results to this bot.';
+  panel.appendChild(hint);
+}
+
+fetch('/api/telegram/status').then(r => r.json()).then(s => {
+  if (s.connected) renderConnected(s.botUsername);
+  else renderSetupForm();
+}).catch(() => renderSetupForm());
+</script>
+</body>
+</html>

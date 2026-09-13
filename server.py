@@ -698,6 +698,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("portfolio.html", "text/html; charset=utf-8")
             if route in ("/assets", "/assets.html"):
                 return self._file("assets.html", "text/html; charset=utf-8")
+            if route in ("/telegram", "/telegram.html"):
+                return self._file("telegram.html", "text/html; charset=utf-8")
             if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
