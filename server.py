@@ -294,19 +294,19 @@ def fetch_enrich(symbol):
 # OpenD, so a missing `futu` package or an unreachable OpenD just degrades to
 # "not connected" here instead of breaking anything else.
 try:
-    from futu import OpenSecTradeContext, TrdEnv, TrdMarket, SecurityFirm
+    from futu import OpenSecTradeContext, TrdMarket, SecurityFirm
     _HAS_FUTU = True
 except ImportError:
     _HAS_FUTU = False
 
 OPEND_HOST = os.environ.get("OPEND_HOST", "127.0.0.1")
 OPEND_PORT = int(os.environ.get("OPEND_PORT", "11111"))
-# Which brokerage entity OpenD was set up under — moomoo's own accounts are
-# typically SecurityFirm.FUTUSECURITIES in the SDK's enum (shared plumbing
-# with Futu). If your OpenD login is a different regional moomoo entity and
-# this returns a firm-mismatch error, swap this for the matching SecurityFirm.*
-# value (see moomoo's OpenAPI docs) or set OPEND_SECURITY_FIRM in the env.
+# Which brokerage entity OpenD was set up under — confirmed working against a
+# real moomoo login as SecurityFirm.FUTUSECURITIES. If your OpenD login is a
+# different regional moomoo entity and this errors, set OPEND_SECURITY_FIRM in
+# the env to the matching SecurityFirm.* name (see moomoo's OpenAPI docs).
 _FIRM_NAME = os.environ.get("OPEND_SECURITY_FIRM", "FUTUSECURITIES")
+_TRD_MARKET_NAME = os.environ.get("OPEND_TRD_MARKET", "US")
 
 
 def fetch_positions():
@@ -315,25 +315,38 @@ def fetch_positions():
                 "error": "futu-api is not installed. Run:  pip install futu-api"}
     try:
         firm = getattr(SecurityFirm, _FIRM_NAME, SecurityFirm.FUTUSECURITIES)
-        trd_ctx = OpenSecTradeContext(host=OPEND_HOST, port=OPEND_PORT, security_firm=firm)
+        market = getattr(TrdMarket, _TRD_MARKET_NAME, TrdMarket.US)
+        trd_ctx = OpenSecTradeContext(filter_trdmarket=market, host=OPEND_HOST, port=OPEND_PORT, security_firm=firm)
     except Exception as e:
         return {"connected": False, "error": "Could not reach OpenD at %s:%d — is it running? (%s)"
                                               % (OPEND_HOST, OPEND_PORT, e)}
     try:
-        ret, data = trd_ctx.position_list_query(trd_env=TrdEnv.REAL, market=TrdMarket.US)
+        # Positions live under a specific (trd_env, acc_id) pair — moomoo logins
+        # can have a real account, a paper/simulate account, or both. Ask OpenD
+        # what accounts actually exist rather than assuming TrdEnv.REAL, so this
+        # works whether the account behind OpenD is real money or paper trading.
+        ret, accs = trd_ctx.get_acc_list()
         if ret != 0:
-            return {"connected": False, "error": str(data)}
-        rows = data.to_dict("records") if hasattr(data, "to_dict") else list(data)
-        positions = [{
-            "symbol": (r.get("code") or "").split(".")[-1],
-            "name": r.get("stock_name"),
-            "qty": r.get("qty"),
-            "costPrice": r.get("cost_price"),
-            "price": r.get("nominal_price") or r.get("cur_price"),
-            "marketValue": r.get("market_val"),
-            "pl": r.get("pl_val"),
-            "plPct": r.get("pl_ratio"),
-        } for r in rows]
+            return {"connected": False, "error": str(accs)}
+        acc_rows = accs.to_dict("records") if hasattr(accs, "to_dict") else list(accs)
+        positions = []
+        for acc in acc_rows:
+            ret, data = trd_ctx.position_list_query(trd_env=acc.get("trd_env"), acc_id=acc.get("acc_id"))
+            if ret != 0:
+                continue
+            rows = data.to_dict("records") if hasattr(data, "to_dict") else list(data)
+            for r in rows:
+                positions.append({
+                    "symbol": (r.get("code") or "").split(".")[-1],
+                    "name": r.get("stock_name"),
+                    "qty": r.get("qty"),
+                    "costPrice": r.get("cost_price"),
+                    "price": r.get("nominal_price") or r.get("cur_price"),
+                    "marketValue": r.get("market_val"),
+                    "pl": r.get("pl_val"),
+                    "plPct": r.get("pl_ratio"),
+                    "env": acc.get("trd_env"),
+                })
         return {"connected": True, "positions": positions}
     except Exception as e:
         return {"connected": False, "error": str(e)}

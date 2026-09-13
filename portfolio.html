@@ -48,6 +48,7 @@
   tbody td:first-child,tbody td:nth-child(2){text-align:left}
   tbody tr:hover td{background:var(--bg-hover)}
   .sym{font:600 12px/1 var(--mono)}
+  .paper{display:inline-block;margin-left:7px;font:600 8.5px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:2px 6px;vertical-align:1px}
   .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--flat)}
   .load{padding:60px 20px;text-align:center;color:var(--fg3)}
   .totals{display:flex;gap:24px;margin:18px 0 22px;flex-wrap:wrap}
@@ -129,7 +130,9 @@ function renderPositions(positions){
   const tbody = el('tbody');
   positions.forEach(p => {
     const tr = el('tr');
-    tr.appendChild(el('td', 'sym', p.symbol || '–'));
+    const symTd = el('td', 'sym', p.symbol || '–');
+    if (p.env === 'SIMULATE') symTd.appendChild(el('span', 'paper', 'Paper'));
+    tr.appendChild(symTd);
     tr.appendChild(el('td', null, p.name || ''));
     tr.appendChild(el('td', null, fmtNum(p.qty, 0)));
     tr.appendChild(el('td', null, fmtNum(p.costPrice, 2)));
