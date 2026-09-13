@@ -16,6 +16,7 @@
     --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none !important}
   html,body{margin:0;height:100%}
   body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
        display:flex;flex-direction:column;min-height:100%;overflow-x:hidden}
@@ -38,6 +39,16 @@
   .card.soon{opacity:.5;cursor:default}
   .card.soon:hover{border-color:var(--line);background:var(--bg2);transform:none}
   .badge{display:inline-block;margin-top:10px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 8px}
+  .card.connect{cursor:pointer}
+  .card.connect:hover{border-color:var(--accent-line);background:var(--bg3)}
+  .card.connect.busy{cursor:default}
+  .card.connect.busy:hover{border-color:var(--line);background:var(--bg2)}
+  .connect-progress{margin-top:12px}
+  .connect-progress .bar{height:4px;background:var(--bg3);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .connect-progress .bar i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s ease}
+  .connect-progress span{display:block;margin-top:7px;font-size:11.5px;color:var(--fg3)}
+  .badge.ok{display:inline-block;margin-top:10px;font:600 11px/1 var(--font);color:var(--accent-fg);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:6px;padding:7px 10px;text-decoration:none}
+  .badge.err{display:block;margin-top:10px;font:500 11.5px/1.5 var(--font);color:#f0a0a8;text-transform:none;letter-spacing:0;border:none;padding:0}
 
   /* ---- boot / welcome intro ---- */
   #intro{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;
@@ -125,6 +136,16 @@
         <h2>moomoo</h2>
         <p>Open your moomoo account in a new tab — trading, positions, and their full screener.</p>
       </a>
+      <div class="card connect" id="connectCard" tabindex="0" role="button">
+        <span class="ic">🔌</span>
+        <h2>Connect moomoo Dashboard</h2>
+        <p id="connectDesc">One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.</p>
+        <div class="connect-progress" id="connectProgress" hidden>
+          <div class="bar"><i id="connectBarFill"></i></div>
+          <span id="connectStatus"></span>
+        </div>
+        <a class="badge ok" id="connectDone" href="/portfolio" hidden>Connected — Open Portfolio →</a>
+      </div>
       <div class="card soon">
         <span class="ic">✦</span>
         <h2>More tools</h2>
@@ -250,6 +271,72 @@
   intro.addEventListener('click', dismiss);
   document.addEventListener('keydown', dismiss, { once: true });
   setTimeout(dismiss, 3200);
+})();
+
+(function(){
+  var card = document.getElementById('connectCard');
+  if (!card) return;
+  var desc = document.getElementById('connectDesc');
+  var progress = document.getElementById('connectProgress');
+  var barFill = document.getElementById('connectBarFill');
+  var statusEl = document.getElementById('connectStatus');
+  var doneEl = document.getElementById('connectDone');
+  var errEl = null;
+  var polling = false;
+
+  function render(state){
+    if (state.status === 'done'){
+      progress.hidden = true;
+      desc.hidden = true;
+      doneEl.hidden = false;
+      doneEl.textContent = 'Connected — Open Portfolio →';
+      card.classList.remove('busy');
+      return;
+    }
+    if (state.status === 'error'){
+      progress.hidden = true;
+      card.classList.remove('busy');
+      if (!errEl){
+        errEl = document.createElement('div');
+        errEl.className = 'badge err';
+        card.appendChild(errEl);
+      }
+      errEl.hidden = false;
+      errEl.textContent = 'Could not connect: ' + state.detail + ' — click to retry.';
+      return;
+    }
+    desc.hidden = true;
+    if (errEl) errEl.hidden = true;
+    progress.hidden = false;
+    card.classList.add('busy');
+    barFill.style.width = Math.max(4, state.pct || 0) + '%';
+    statusEl.textContent = state.detail || 'Working...';
+  }
+
+  function poll(){
+    if (polling) return;
+    polling = true;
+    fetch('/api/opend/status').then(function(r){ return r.json(); }).then(function(state){
+      render(state);
+      polling = false;
+      if (state.status === 'downloading' || state.status === 'extracting' || state.status === 'launching'){
+        setTimeout(poll, 1000);
+      }
+    }).catch(function(){ polling = false; });
+  }
+
+  card.addEventListener('click', function(){
+    if (card.classList.contains('busy')) return;
+    fetch('/api/opend/setup').then(function(r){ return r.json(); }).then(function(state){
+      render(state);
+      setTimeout(poll, 1000);
+    }).catch(function(e){
+      render({ status: 'error', detail: 'request failed: ' + e.message });
+    });
+  });
+  card.addEventListener('keydown', function(e){
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); }
+  });
 })();
 </script>
 </body>

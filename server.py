@@ -358,6 +358,129 @@ def fetch_positions():
 
 
 # ----------------------------------------------------------------------------
+# one-click OpenD install + launch — LOCAL USE ONLY.
+#
+# Automates the mechanical, credential-free part of setting up OpenD: fetch it
+# from moomoo's own CDN, unzip it, start it. It deliberately stops there — it
+# never touches your moomoo password. OpenD's own window opens and you log in
+# yourself, same as running it by hand.
+#
+# Only reachable when this server is bound to localhost (see _is_local_run),
+# and py7zr (needed only to unzip the .7z) is optional/ImportError-guarded
+# just like futu-api, so this is a no-op import-wise on the cloud image.
+try:
+    import py7zr
+    _HAS_PY7ZR = True
+except ImportError:
+    _HAS_PY7ZR = False
+
+_OPEND_DIR = os.path.join(ROOT, "opend")
+_OPEND_VERSION = "10.10.7008"  # last version verified end-to-end; bump if moomoo retires it
+_OPEND_ARCHIVE_NAME = "moomoo_OpenD_%s_Windows.7z" % _OPEND_VERSION
+_OPEND_LINK_API = "https://www.moomoo.com/api/download-link?file=" + _OPEND_ARCHIVE_NAME
+
+_opend_setup_lock = threading.Lock()
+_opend_setup_state = {"status": "idle", "detail": "", "pct": 0}
+
+
+def _is_local_run():
+    return HOST in ("127.0.0.1", "localhost")
+
+
+def _opend_gui_exe_path():
+    if not os.path.isdir(_OPEND_DIR):
+        return None
+    for dirpath, _dirs, files in os.walk(_OPEND_DIR):
+        for f in files:
+            if f.lower().startswith("moomoo_opend-gui") and f.lower().endswith(".exe"):
+                return os.path.join(dirpath, f)
+    return None
+
+
+def _opend_port_open():
+    import socket
+    try:
+        with socket.create_connection((OPEND_HOST, OPEND_PORT), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def _run_opend_setup():
+    global _opend_setup_state
+    try:
+        if _opend_port_open():
+            _opend_setup_state = {"status": "done", "detail": "OpenD is already running.", "pct": 100}
+            return
+        if not _HAS_PY7ZR:
+            raise RuntimeError("py7zr is not installed. Run:  pip install py7zr")
+
+        exe = _opend_gui_exe_path()
+        if not exe:
+            _opend_setup_state = {"status": "downloading", "detail": "Asking moomoo for a download link...", "pct": 0}
+            op = _build_opener()
+            _, raw = _http_get(op, _OPEND_LINK_API)
+            link_data = json.loads(raw.decode("utf-8", "replace"))
+            url = (link_data.get("data") or {}).get("link")
+            if not url:
+                raise RuntimeError("moomoo did not return a download link: %s" % link_data.get("message"))
+
+            os.makedirs(_OPEND_DIR, exist_ok=True)
+            archive_path = os.path.join(_OPEND_DIR, _OPEND_ARCHIVE_NAME)
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                total = int(resp.headers.get("Content-Length", 0) or 0)
+                downloaded = 0
+                with open(archive_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(1024 * 256)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        pct = int(downloaded * 90 / total) if total else 0
+                        _opend_setup_state = {"status": "downloading",
+                                               "detail": "%d / %d MB" % (downloaded // 1048576, total // 1048576 or 1),
+                                               "pct": pct}
+
+            _opend_setup_state = {"status": "extracting", "detail": "Extracting...", "pct": 92}
+            with py7zr.SevenZipFile(archive_path, mode="r") as z:
+                z.extractall(path=_OPEND_DIR)
+            try:
+                os.remove(archive_path)
+            except OSError:
+                pass
+            exe = _opend_gui_exe_path()
+            if not exe:
+                raise RuntimeError("extracted the archive but couldn't find moomoo_OpenD-GUI*.exe inside it")
+
+        _opend_setup_state = {"status": "launching",
+                               "detail": "Opening moomoo OpenD — log in with your moomoo account in its window.",
+                               "pct": 96}
+        import subprocess
+        subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        for _ in range(20):
+            time.sleep(1)
+            if _opend_port_open():
+                break
+        _opend_setup_state = {"status": "done",
+                               "detail": "OpenD is open. Log in with your moomoo account in its window, then open Portfolio.",
+                               "pct": 100}
+    except Exception as e:
+        _opend_setup_state = {"status": "error", "detail": str(e), "pct": 0}
+
+
+def start_opend_setup():
+    global _opend_setup_state
+    with _opend_setup_lock:
+        if _opend_setup_state["status"] in ("downloading", "extracting", "launching"):
+            return dict(_opend_setup_state)
+        _opend_setup_state = {"status": "downloading", "detail": "Starting...", "pct": 0}
+        threading.Thread(target=_run_opend_setup, daemon=True).start()
+        return dict(_opend_setup_state)
+
+
+# ----------------------------------------------------------------------------
 # HTTP handler
 # ----------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -466,6 +589,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if route == "/api/positions":
                 return self._send(200, fetch_positions())
+
+            if route == "/api/opend/setup":
+                if not _is_local_run():
+                    return self._send(403, {"error": "local only"})
+                return self._send(200, start_opend_setup())
+
+            if route == "/api/opend/status":
+                if not _is_local_run():
+                    return self._send(403, {"error": "local only"})
+                return self._send(200, dict(_opend_setup_state))
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
