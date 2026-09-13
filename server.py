@@ -756,6 +756,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(403, {"error": "local only"})
                 return self._send(200, dict(_opend_setup_state))
 
+            if route == "/api/opend/probe":
+                # cheap, side-effect-free port check for "are we already
+                # connected" on page load -- unlike /api/opend/setup this
+                # never starts a download.
+                if not _is_local_run():
+                    return self._send(403, {"error": "local only"})
+                return self._send(200, {"connected": _opend_port_open()})
+
             if route == "/api/telegram/status":
                 return self._send(200, telegram_status())
 

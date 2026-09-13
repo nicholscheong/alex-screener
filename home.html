@@ -30,6 +30,19 @@
   .hero h1{margin:0 0 8px;font-size:28px;font-weight:650;letter-spacing:-.015em;color:var(--fg)}
   .hero p{margin:0 0 34px;color:var(--fg2);font-size:14px;line-height:1.6;max-width:520px}
 
+  .mini-row{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap}
+  .mini-card{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+             padding:8px 14px;text-decoration:none;color:inherit;font-size:12px;cursor:pointer;white-space:nowrap;
+             transition:border-color .12s,background .12s}
+  a.mini-card:hover,.mini-card:hover{border-color:var(--accent-line);background:var(--bg3)}
+  .mini-card.busy{cursor:default}
+  .mini-card.busy:hover{border-color:var(--line);background:var(--bg2)}
+  .mini-card .ic{font-size:14px;line-height:1}
+  .mini-card .label{font-weight:600;color:var(--fg)}
+  .mini-card .state{color:var(--fg3);font-size:11px}
+  .mini-card .state.ok{color:#3ecf8e}
+  .mini-card .state.err{color:#f0a0a8}
+
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
   .card{display:block;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;text-decoration:none;color:inherit;transition:border-color .12s,background .12s,transform .12s}
   a.card:hover{border-color:var(--accent-line);background:var(--bg3);transform:translateY(-1px)}
@@ -39,16 +52,6 @@
   .card.soon{opacity:.5;cursor:default}
   .card.soon:hover{border-color:var(--line);background:var(--bg2);transform:none}
   .badge{display:inline-block;margin-top:10px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 8px}
-  .card.connect{cursor:pointer}
-  .card.connect:hover{border-color:var(--accent-line);background:var(--bg3)}
-  .card.connect.busy{cursor:default}
-  .card.connect.busy:hover{border-color:var(--line);background:var(--bg2)}
-  .connect-progress{margin-top:12px}
-  .connect-progress .bar{height:4px;background:var(--bg3);border:1px solid var(--line);border-radius:3px;overflow:hidden}
-  .connect-progress .bar i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s ease}
-  .connect-progress span{display:block;margin-top:7px;font-size:11.5px;color:var(--fg3)}
-  .badge.ok{display:inline-block;margin-top:10px;font:600 11px/1 var(--font);color:var(--accent-fg);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:6px;padding:7px 10px;text-decoration:none}
-  .badge.err{display:block;margin-top:10px;font:500 11.5px/1.5 var(--font);color:#f0a0a8;text-transform:none;letter-spacing:0;border:none;padding:0}
 
   /* ---- boot / welcome intro ---- */
   #intro{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;
@@ -116,6 +119,17 @@
 </header>
 <main>
   <div class="wrap">
+    <div class="mini-row">
+      <div class="mini-card" id="connectCard" tabindex="0" role="button" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
+        <span class="ic">🔌</span>
+        <span class="label" id="connectLabel">Connect moomoo</span>
+        <span class="state" id="connectState"></span>
+      </div>
+      <a class="mini-card" href="/telegram" title="Push your screener results to a Telegram bot you create. Read-only, no trading.">
+        <span class="ic">📨</span>
+        <span class="label">Connect Telegram</span>
+      </a>
+    </div>
     <div class="hero">
       <h1>Alex</h1>
       <p>Your personal equity tools. Pick a module below to get started — more will show up here over time.</p>
@@ -130,21 +144,6 @@
         <span class="ic">🏦</span>
         <h2>Assets</h2>
         <p>Your account balances — total assets, cash, market value, buying power. Read-only, local version only.</p>
-      </a>
-      <div class="card connect" id="connectCard" tabindex="0" role="button">
-        <span class="ic">🔌</span>
-        <h2>Connect moomoo Dashboard</h2>
-        <p id="connectDesc">One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.</p>
-        <div class="connect-progress" id="connectProgress" hidden>
-          <div class="bar"><i id="connectBarFill"></i></div>
-          <span id="connectStatus"></span>
-        </div>
-        <a class="badge ok" id="connectDone" href="/portfolio" hidden>Connected — Open Portfolio →</a>
-      </div>
-      <a class="card" href="/telegram">
-        <span class="ic">📨</span>
-        <h2>Connect Telegram Bot</h2>
-        <p>Push your screener results to a Telegram bot you create. Read-only, no trading.</p>
       </a>
       <div class="card soon">
         <span class="ic">✦</span>
@@ -276,41 +275,31 @@
 (function(){
   var card = document.getElementById('connectCard');
   if (!card) return;
-  var desc = document.getElementById('connectDesc');
-  var progress = document.getElementById('connectProgress');
-  var barFill = document.getElementById('connectBarFill');
-  var statusEl = document.getElementById('connectStatus');
-  var doneEl = document.getElementById('connectDone');
-  var errEl = null;
+  var label = document.getElementById('connectLabel');
+  var stateEl = document.getElementById('connectState');
   var polling = false;
+  var done = false;
 
   function render(state){
+    stateEl.classList.remove('ok', 'err');
     if (state.status === 'done'){
-      progress.hidden = true;
-      desc.hidden = true;
-      doneEl.hidden = false;
-      doneEl.textContent = 'Connected — Open Portfolio →';
+      done = true;
       card.classList.remove('busy');
+      label.textContent = 'moomoo';
+      stateEl.classList.add('ok');
+      stateEl.textContent = '✓ Connected';
+      card.title = 'Connected — click to open Portfolio.';
       return;
     }
     if (state.status === 'error'){
-      progress.hidden = true;
       card.classList.remove('busy');
-      if (!errEl){
-        errEl = document.createElement('div');
-        errEl.className = 'badge err';
-        card.appendChild(errEl);
-      }
-      errEl.hidden = false;
-      errEl.textContent = 'Could not connect: ' + state.detail + ' — click to retry.';
+      stateEl.classList.add('err');
+      stateEl.textContent = '✗ Retry';
+      card.title = 'Could not connect: ' + state.detail + ' — click to retry.';
       return;
     }
-    desc.hidden = true;
-    if (errEl) errEl.hidden = true;
-    progress.hidden = false;
     card.classList.add('busy');
-    barFill.style.width = Math.max(4, state.pct || 0) + '%';
-    statusEl.textContent = state.detail || 'Working...';
+    stateEl.textContent = (state.pct ? state.pct + '% ' : '') + (state.detail || 'Working...');
   }
 
   function poll(){
@@ -326,6 +315,7 @@
   }
 
   card.addEventListener('click', function(){
+    if (done){ window.location.href = '/portfolio'; return; }
     if (card.classList.contains('busy')) return;
     fetch('/api/opend/setup').then(function(r){ return r.json(); }).then(function(state){
       render(state);
@@ -337,6 +327,9 @@
   card.addEventListener('keydown', function(e){
     if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); }
   });
+  fetch('/api/opend/probe').then(function(r){ return r.json(); }).then(function(p){
+    if (p.connected) render({ status: 'done' });
+  }).catch(function(){});
 })();
 </script>
 </body>
