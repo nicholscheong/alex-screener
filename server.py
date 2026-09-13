@@ -301,11 +301,14 @@ except ImportError:
 
 OPEND_HOST = os.environ.get("OPEND_HOST", "127.0.0.1")
 OPEND_PORT = int(os.environ.get("OPEND_PORT", "11111"))
-# Which brokerage entity OpenD was set up under — confirmed working against a
-# real moomoo login as SecurityFirm.FUTUSECURITIES. If your OpenD login is a
-# different regional moomoo entity and this errors, set OPEND_SECURITY_FIRM in
-# the env to the matching SecurityFirm.* name (see moomoo's OpenAPI docs).
-_FIRM_NAME = os.environ.get("OPEND_SECURITY_FIRM", "FUTUSECURITIES")
+# Which brokerage entity OpenD was set up under. SecurityFirm.FUTUSECURITIES
+# (the SDK's generic default) only surfaces SIMULATE accounts for this login —
+# the REAL accounts only appear under SecurityFirm.FUTUMY, confirmed against a
+# real funded account (moomoo Malaysia). If your OpenD login is under a
+# different regional moomoo entity and your real account isn't showing up,
+# try the matching SecurityFirm.* name (FUTUINC/FUTUSG/FUTUAU/FUTUCA/FUTUJP)
+# via OPEND_SECURITY_FIRM in the env.
+_FIRM_NAME = os.environ.get("OPEND_SECURITY_FIRM", "FUTUMY")
 _TRD_MARKET_NAME = os.environ.get("OPEND_TRD_MARKET", "US")
 
 
@@ -379,7 +382,9 @@ def fetch_assets():
             rows = data.to_dict("records") if hasattr(data, "to_dict") else list(data)
             for r in rows:
                 assets.append({
-                    "accId": acc.get("acc_id"),
+                    # stringified: real account ids are 64-bit and lose precision
+                    # once JS parses them back out of JSON as a Number
+                    "accId": str(acc.get("acc_id")),
                     "env": acc.get("trd_env"),
                     "totalAssets": r.get("total_assets"),
                     "cash": r.get("cash"),
