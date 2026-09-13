@@ -632,6 +632,8 @@ const state = {
   sigFilter: LS.get('signals', []),
   // moomoo-style MACD condition builder: [{ id, timeframe, c1, op, c2, value, short, long, signal }, ...]
   macdConds: LS.get('macdConds', []),
+  // moomoo-style single-value indicator conditions: [{ id, base, period, timeframe, op, value }]
+  paramConds: LS.get('paramConds', []),
   tfHist: new Map(),     // symbol -> { W:{c,t}, M:{c,t}, '1m':{c,t}, '3m':{c,t}, '5m':{c,t} } — lazy, non-daily bars
   shapeQuery: null,     // { curve:[0..1]*64, curveZ, win, thumb }  — set by Pattern Search
   timer: null,
@@ -892,9 +894,12 @@ function passesFilters(r, opts){
     if (f.min != null && v < f.min) return false;
     if (f.max != null && v > f.max) return false;
   }
-  if (!(opts && opts.skipMacd)){
+  if (!(opts && opts.skipConds)){
     for (const cond of state.macdConds){
       if (!evalMacdCond(r, cond)) return false;   // null (no data yet) or false both exclude
+    }
+    for (const cond of state.paramConds){
+      if (!evalParamCond(r, cond)) return false;
     }
   }
   return true;
@@ -1272,6 +1277,7 @@ function persist(){
   LS.set('sectors', state.sectorFilter);
   LS.set('signals', state.sigFilter);
   LS.set('macdConds', state.macdConds);
+  LS.set('paramConds', state.paramConds);
 }
 
 //////////////////// indicator picker ////////////////////
@@ -1302,6 +1308,7 @@ function clearIndCols(){
   state.sectorFilter = [];
   state.sigFilter = [];
   state.macdConds = [];
+  state.paramConds = [];
   state.sortKey = 'chgPct'; state.sortDir = -1;
   afterIndChange();
 }
@@ -1311,6 +1318,7 @@ function resetFilterValues(){
   state.sectorFilter = [];
   state.sigFilter = [];
   state.macdConds = [];
+  state.paramConds = [];
   afterIndChange();
 }
 function afterIndChange(){
@@ -1437,6 +1445,14 @@ function buildIndBar(){
     chip.appendChild(x);
     bar.appendChild(chip);
   });
+  state.paramConds.forEach(cond => {
+    const chip = el('span', 'ind-chip');
+    chip.appendChild(el('span', null, paramCondLabel(cond)));
+    const x = el('button', null, '×'); x.title = 'Remove condition';
+    x.onclick = () => { state.paramConds = state.paramConds.filter(c => c.id !== cond.id); afterIndChange(); };
+    chip.appendChild(x);
+    bar.appendChild(chip);
+  });
   if (state.shapeQuery){
     const chip = el('span', 'sm-chip');
     if (state.shapeQuery.thumb){ const im = el('img'); im.src = state.shapeQuery.thumb; im.alt = ''; chip.appendChild(im); }
@@ -1447,7 +1463,7 @@ function buildIndBar(){
   }
   const chosen = visibleCols().filter(c => !ALWAYS_COLS.includes(c.k) && c.k !== 'shapeSim');
   const anything = chosen.length || state.sectorFilter.length || state.sigFilter.length ||
-                   state.macdConds.length || Object.keys(state.filters).length || state.shapeQuery;
+                   state.macdConds.length || state.paramConds.length || Object.keys(state.filters).length || state.shapeQuery;
   if (!chosen.length && !state.shapeQuery){
     const cb = el('button', 'clearAll star', '★ Common metrics');
     cb.style.marginLeft = '0';
@@ -1495,6 +1511,10 @@ function renderMetricSelected(){
   state.macdConds.forEach(cond => items.push({
     label: macdCondLabel(cond),
     remove: () => { state.macdConds = state.macdConds.filter(c => c.id !== cond.id); afterIndChange(); },
+  }));
+  state.paramConds.forEach(cond => items.push({
+    label: paramCondLabel(cond),
+    remove: () => { state.paramConds = state.paramConds.filter(c => c.id !== cond.id); afterIndChange(); },
   }));
   SIGNALS.filter(s => s[3] === 'macd' && state.sigFilter.includes(s[0])).forEach(s => items.push({
     label: s[1],
@@ -1552,7 +1572,9 @@ function buildIndDrop(query){
   });
 }
 // --- MACD condition builder (moomoo-style): timeframe + "condition 1 [op] condition 2" + custom periods ---
-const MACD_TFS = { D: 'Daily', W: 'Weekly', M: 'Monthly', '1m': '1 min', '3m': '3 min', '5m': '5 min' };
+const MACD_TFS = { D: 'Daily', W: 'Weekly', M: 'Monthly', '1m': '1 min', '3m': '3 min', '5m': '5 min',
+                   '15m': '15 min', '30m': '30 min', '60m': '60 min' };
+const PARAM_OPS = { gt: 'Greater Than', lt: 'Less Than', risesAbove: 'Rises Above', fallsBelow: 'Falls Below' };
 const MACD_LINES = { dif: 'DIF', dea: 'DEA', macd: 'MACD' };
 const MACD_C2 = { dif: 'DIF', dea: 'DEA', macd: 'MACD', price: 'Price', value: 'Value' };
 const MACD_OPS = { gt: 'greater than', lt: 'less than', crossAbove: 'crosses above', crossBelow: 'crosses below' };
@@ -1572,15 +1594,20 @@ function macdCondLabel(cond){
 function seriesForTimeframe(row, tf){
   if (tf === 'D'){
     if (!row.hist || !row.hist.c || !row.hist.c.length) return null;
-    const c = row.hist.c.slice();
-    if (row.price != null && isFinite(row.price)) c[c.length - 1] = row.price;
-    return c;
+    const c = row.hist.c.slice(), h = (row.hist.h || row.hist.c).slice(), l = (row.hist.l || row.hist.c).slice();
+    if (row.price != null && isFinite(row.price)){
+      c[c.length - 1] = row.price;
+      h[h.length - 1] = Math.max(h[h.length - 1], row.price);
+      l[l.length - 1] = Math.min(l[l.length - 1], row.price);
+    }
+    return { c, h, l };
   }
-  const h = state.tfHist.get(row.symbol);
-  return (h && h[tf]) ? h[tf].c : null;
+  const tfh = state.tfHist.get(row.symbol);
+  return (tfh && tfh[tf]) ? tfh[tf] : null;
 }
 function evalMacdCond(row, cond){
-  const closes = seriesForTimeframe(row, cond.timeframe);
+  const S = seriesForTimeframe(row, cond.timeframe);
+  const closes = S && S.c;
   if (!closes || closes.length < cond.long + cond.signal + 1) return null;
   const m = macd(closes, cond.short, cond.long, cond.signal);
   if (!m) return null;
@@ -1595,6 +1622,29 @@ function evalMacdCond(row, cond){
   if (cond.op === 'crossAbove') return pa <= pb && a > b;
   if (cond.op === 'crossBelow') return pa >= pb && a < b;
   return null;
+}
+// moomoo-style condition for a single-value period-tunable indicator (RSI/MA/BIAS/ATR%/KDJ-J):
+// timeframe + period + operator (Greater/Less Than, or Rises Above/Falls Below a threshold — a
+// cross against a fixed value rather than against another line, like the MACD builder's cond2='value').
+function evalParamCond(row, cond){
+  const S = seriesForTimeframe(row, cond.timeframe);
+  if (!S || !S.c || S.c.length < cond.period + 6) return null;
+  const meta = PARAM_METRICS[cond.base];
+  const D = { c: S.c, h: S.h, l: S.l, price: S.c[S.c.length - 1] };
+  let v; try { v = meta.calc(D, cond.period); } catch(e){ v = null; }
+  if (v == null || isNaN(v)) return null;
+  if (cond.op === 'gt') return v > cond.value;
+  if (cond.op === 'lt') return v < cond.value;
+  const D0 = { c: S.c.slice(0, -1), h: S.h.slice(0, -1), l: S.l.slice(0, -1), price: S.c[S.c.length - 2] };
+  let pv; try { pv = meta.calc(D0, cond.period); } catch(e){ pv = null; }
+  if (pv == null || isNaN(pv)) return null;
+  if (cond.op === 'risesAbove') return pv <= cond.value && v > cond.value;
+  if (cond.op === 'fallsBelow') return pv >= cond.value && v < cond.value;
+  return null;
+}
+function paramCondLabel(cond){
+  const meta = PARAM_METRICS[cond.base];
+  return `${MACD_TFS[cond.timeframe]} · ${meta.label(cond.period)} ${PARAM_OPS[cond.op]} ${cond.value}`;
 }
 // picker rows for period-tunable metrics / MACD start collapsed (name only) — click to
 // reveal the parameter inputs, same as clicking any other row. Cleared each time the
@@ -1708,7 +1758,7 @@ function paramPickRow(base, presetNum){
   inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter'){ e.preventDefault(); addNow(); } };
   item.appendChild(el('span', 'plabel', 'period'));
   item.appendChild(inp);
-  const add = el('button', 'padd', '+ Add'); add.onclick = e => { e.stopPropagation(); addNow(); };
+  const add = el('button', 'padd', '+ Add column'); add.onclick = e => { e.stopPropagation(); addNow(); };
   item.appendChild(add);
   item.appendChild(el('span', 'gt', meta.g));
 
@@ -1726,6 +1776,55 @@ function paramPickRow(base, presetNum){
       sh.appendChild(chip);
     });
     item.appendChild(sh);
+  }
+
+  // richer moomoo-style screening condition: timeframe + operator + a threshold value,
+  // separate from just showing the raw number as a column above
+  const condForm = el('div', 'macd-form');
+  condForm.onclick = e => e.stopPropagation();
+  const mkSel = (map, def) => {
+    const s = el('select', 'psel');
+    Object.entries(map).forEach(([k, lbl]) => { const o = el('option', null, lbl); o.value = k; s.appendChild(o); });
+    if (def) s.value = def;
+    return s;
+  };
+  const condRow1 = el('div', 'macd-row');
+  const tfSel = mkSel(MACD_TFS, 'D');
+  condRow1.appendChild(el('span', 'plabel', 'timeframe')); condRow1.appendChild(tfSel);
+  condForm.appendChild(condRow1);
+  const condRow2 = el('div', 'macd-row');
+  const opSel = mkSel(PARAM_OPS, 'risesAbove');
+  const valInp = el('input', 'pnum'); valInp.type = 'number'; valInp.step = 'any';
+  valInp.value = meta.unit === '%' ? 0 : (base === 'kdjj' ? 80 : base === 'rsi' ? 70 : 0);
+  condRow2.appendChild(opSel);
+  condRow2.appendChild(el('span', 'plabel', 'value')); condRow2.appendChild(valInp);
+  const addCond = el('button', 'padd', '+ Add condition');
+  addCond.onclick = e => {
+    e.stopPropagation();
+    state.paramConds.push({
+      id: 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      base, period: clampPeriod(inp.value || meta.def), timeframe: tfSel.value,
+      op: opSel.value, value: parseFloat(valInp.value) || 0,
+    });
+    afterIndChange();
+  };
+  condRow2.appendChild(addCond);
+  condForm.appendChild(condRow2);
+  item.appendChild(condForm);
+
+  const ownConds = state.paramConds.filter(c => c.base === base);
+  if (ownConds.length){
+    const sh2 = el('div', 'pshown');
+    sh2.appendChild(el('span', 'pshown-lbl', 'conditions:'));
+    ownConds.forEach(cond => {
+      const chip = el('span', 'pshown-chip');
+      chip.appendChild(document.createTextNode(paramCondLabel(cond)));
+      const x = el('button', null, '×'); x.title = 'Remove';
+      x.onclick = e => { e.stopPropagation(); state.paramConds = state.paramConds.filter(c => c.id !== cond.id); afterIndChange(); };
+      chip.appendChild(x);
+      sh2.appendChild(chip);
+    });
+    item.appendChild(sh2);
   }
   return item;
 }
@@ -1745,6 +1844,7 @@ function snapshotState(){
     sectorFilter: state.sectorFilter.slice(),
     sigFilter: state.sigFilter.slice(),
     macdConds: JSON.parse(JSON.stringify(state.macdConds)),
+    paramConds: JSON.parse(JSON.stringify(state.paramConds)),
     sortKey: state.sortKey,
     sortDir: state.sortDir,
   };
@@ -1755,6 +1855,7 @@ function applySnapshot(snap){
   state.sectorFilter = (snap.sectorFilter || []).slice();
   state.sigFilter = (snap.sigFilter || []).slice();
   state.macdConds = JSON.parse(JSON.stringify(snap.macdConds || []));
+  state.paramConds = JSON.parse(JSON.stringify(snap.paramConds || []));
   state.sortKey = snap.sortKey || 'chgPct';
   state.sortDir = snap.sortDir != null ? snap.sortDir : -1;
 }
@@ -2128,15 +2229,19 @@ const queueEnrichVisible = queueEnrich;
 // (Yahoo has no native 3m interval). Loaded only for symbols currently in view, capped like the
 // financials backfill above — full-universe intraday history is too heavy to pull for all 503.
 const TF_YAHOO = { W: { interval: '1wk', range: '5y' }, M: { interval: '1mo', range: '10y' },
-                   '1m': { interval: '1m', range: '5d' }, '5m': { interval: '5m', range: '1mo' } };
+                   '1m': { interval: '1m', range: '5d' }, '5m': { interval: '5m', range: '1mo' },
+                   '15m': { interval: '15m', range: '1mo' }, '30m': { interval: '30m', range: '3mo' },
+                   '60m': { interval: '60m', range: '6mo' } };
 function resample3m(oneMin){
   if (!oneMin || !oneMin.c.length) return null;
-  const c = [], t = [];
+  const c = [], h = [], l = [], t = [];
   for (let i = 0; i < oneMin.c.length; i += 3){
     const j = Math.min(i + 2, oneMin.c.length - 1);
-    c.push(oneMin.c[j]); t.push(oneMin.t[i]);
+    let hh = -Infinity, ll = Infinity;
+    for (let k = i; k <= j; k++){ hh = Math.max(hh, oneMin.h[k]); ll = Math.min(ll, oneMin.l[k]); }
+    c.push(oneMin.c[j]); h.push(hh); l.push(ll); t.push(oneMin.t[i]);
   }
-  return { c, t };
+  return { c, h, l, t };
 }
 async function fetchTF(symbol, tf){
   if (tf === '3m'){
@@ -2149,17 +2254,21 @@ async function fetchTF(symbol, tf){
   const res = d.chart && d.chart.result && d.chart.result[0];
   if (!res || !res.timestamp) return null;
   const q = res.indicators.quote[0];
-  const c = [], t = [];
+  const c = [], h = [], l = [], t = [];
   for (let i = 0; i < res.timestamp.length; i++){
     if (q.close[i] == null) continue;
-    c.push(q.close[i]); t.push(res.timestamp[i]);
+    c.push(q.close[i]);
+    h.push(q.high[i] != null ? q.high[i] : q.close[i]);
+    l.push(q.low[i] != null ? q.low[i] : q.close[i]);
+    t.push(res.timestamp[i]);
   }
-  return { c, t };
+  return { c, h, l, t };
 }
 let tfQueued = new Set(), tfDone = 0, tfTotal = 0;
 function activeNonDailyTFs(){
   const s = new Set();
   state.macdConds.forEach(c => { if (c.timeframe !== 'D') s.add(c.timeframe); });
+  state.paramConds.forEach(c => { if (c.timeframe !== 'D') s.add(c.timeframe); });
   return s;
 }
 function updateTFProg(){
@@ -2170,7 +2279,7 @@ function updateTFProg(){
 function queueTF(){
   const tfs = activeNonDailyTFs();
   if (!tfs.size){ tfTotal = 0; tfDone = 0; updateTFProg(); return; }
-  const pool = [...state.rows.values()].filter(r => passesSearch(r) && passesFilters(r, { skipMacd: true }))
+  const pool = [...state.rows.values()].filter(r => passesSearch(r) && passesFilters(r, { skipConds: true }))
     .slice(0, 120).map(r => r.symbol);
   const need = [];
   pool.forEach(sym => tfs.forEach(tf => {
