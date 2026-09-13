@@ -30,7 +30,7 @@
   .hero h1{margin:0 0 8px;font-size:28px;font-weight:650;letter-spacing:-.015em;color:var(--fg)}
   .hero p{margin:0 0 34px;color:var(--fg2);font-size:14px;line-height:1.6;max-width:520px}
 
-  .mini-row{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap}
+  .mini-row{display:flex;gap:10px;flex:none;padding:14px 20px 0;flex-wrap:wrap}
   .mini-card{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;
              padding:8px 14px;text-decoration:none;color:inherit;font-size:12px;cursor:pointer;white-space:nowrap;
              transition:border-color .12s,background .12s}
@@ -117,19 +117,19 @@
 <header>
   <div class="logo"><span>Alex</span><small>Home</small></div>
 </header>
+<div class="mini-row">
+  <div class="mini-card" id="connectCard" tabindex="0" role="button" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
+    <span class="ic">🔌</span>
+    <span class="label" id="connectLabel">Connect moomoo</span>
+    <span class="state" id="connectState"></span>
+  </div>
+  <a class="mini-card" href="/telegram" title="Push your screener results to a Telegram bot you create. Read-only, no trading.">
+    <span class="ic">📨</span>
+    <span class="label">Connect Telegram</span>
+  </a>
+</div>
 <main>
   <div class="wrap">
-    <div class="mini-row">
-      <div class="mini-card" id="connectCard" tabindex="0" role="button" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
-        <span class="ic">🔌</span>
-        <span class="label" id="connectLabel">Connect moomoo</span>
-        <span class="state" id="connectState"></span>
-      </div>
-      <a class="mini-card" href="/telegram" title="Push your screener results to a Telegram bot you create. Read-only, no trading.">
-        <span class="ic">📨</span>
-        <span class="label">Connect Telegram</span>
-      </a>
-    </div>
     <div class="hero">
       <h1>Alex</h1>
       <p>Your personal equity tools. Pick a module below to get started — more will show up here over time.</p>
