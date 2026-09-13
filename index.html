@@ -640,6 +640,11 @@ const COLS = [
   { k: 'sharesOut', t: 'Shares out', g: 'Valuation', fmt: r => fmtBig(r.shares), sort: r => r.shares },
   { k: 'floatShares', t: 'Free float', g: 'Valuation', fmt: r => fmtBig(e_(r, 'floatShares')), sort: r => e_(r, 'floatShares') },
   { k: 'floatCap', t: 'Float cap', g: 'Valuation', fmt: r => fmtBig(floatCap(r)), sort: r => floatCap(r) },
+  { k: 'shortFloat', t: 'Short % float', g: 'Valuation', fmt: r => pct(e_(r, 'shortPercentOfFloat') != null ? e_(r, 'shortPercentOfFloat') * 100 : null, 1), sort: r => e_(r, 'shortPercentOfFloat') },
+  { k: 'insiderPct', t: 'Insider own.', g: 'Valuation', fmt: r => pct(e_(r, 'heldPercentInsiders') != null ? e_(r, 'heldPercentInsiders') * 100 : null, 1), sort: r => e_(r, 'heldPercentInsiders') },
+  { k: 'instPct', t: 'Institutional own.', g: 'Valuation', fmt: r => pct(e_(r, 'heldPercentInstitutions') != null ? e_(r, 'heldPercentInstitutions') * 100 : null, 1), sort: r => e_(r, 'heldPercentInstitutions') },
+  { k: 'targetPrice', t: 'Analyst target', g: 'Valuation', fmt: r => nf(e_(r, 'targetMeanPrice'), 2), sort: r => e_(r, 'targetMeanPrice') },
+  { k: 'upside', t: 'Upside %', g: 'Valuation', fmt: r => pct(upsidePct(r), 1), cls: r => sgn(upsidePct(r)), sort: r => upsidePct(r) },
   { k: 'peTTM', t: 'P/E (TTM)', g: 'Valuation', fmt: r => nf(r.peTTM, 1), sort: r => r.peTTM },
   { k: 'peFwd', t: 'Fwd P/E', g: 'Valuation', fmt: r => nf(r.peFwd, 1), sort: r => r.peFwd },
   { k: 'pb', t: 'P/B', g: 'Valuation', fmt: r => nf(r.pb, 2), sort: r => r.pb },
@@ -658,6 +663,9 @@ const COLS = [
   { k: 'earnG', t: 'EPS growth', g: 'Financials', fmt: r => pct(e_(r, 'earningsGrowth') != null ? e_(r, 'earningsGrowth') * 100 : null, 1), cls: r => sgn(e_(r, 'earningsGrowth')), sort: r => e_(r, 'earningsGrowth') },
   { k: 'd2e', t: 'Debt/eq', g: 'Financials', fmt: r => nf(e_(r, 'debtToEquity'), 1), sort: r => e_(r, 'debtToEquity') },
   { k: 'curRatio', t: 'Current ratio', g: 'Financials', fmt: r => nf(e_(r, 'currentRatio'), 2), sort: r => e_(r, 'currentRatio') },
+  { k: 'quickRatio', t: 'Quick ratio', g: 'Financials', fmt: r => nf(e_(r, 'quickRatio'), 2), sort: r => e_(r, 'quickRatio') },
+  { k: 'totalCash', t: 'Total cash', g: 'Financials', fmt: r => fmtBig(e_(r, 'totalCash')), sort: r => e_(r, 'totalCash') },
+  { k: 'fcf', t: 'Free cash flow', g: 'Financials', fmt: r => fmtBig(e_(r, 'freeCashflow')), sort: r => e_(r, 'freeCashflow') },
   { k: 'beta', t: 'Beta', g: 'Financials', fmt: r => nf(e_(r, 'beta'), 2), sort: r => e_(r, 'beta') },
 
   // RSI / MA / BIAS / ATR% / KDJ-J are period-tunable: added from the metric picker as
@@ -671,6 +679,7 @@ const COLS = [
 const t_ = (r, k) => r.tech ? r.tech[k] : null;
 const e_ = (r, k) => r.enrich ? r.enrich[k] : null;
 const floatCap = r => { const f = e_(r, 'floatShares'); return (f != null && r.price != null) ? f * r.price : null; };
+const upsidePct = r => { const t = e_(r, 'targetMeanPrice'); return (t != null && r.price) ? (t - r.price) / r.price * 100 : null; };
 const sgn = v => v == null || isNaN(v) ? '' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
 
 //////////////////// period-tunable technicals ////////////////////
@@ -797,10 +806,13 @@ const FUNIT = {
   ret5: '%', ret20: '%', ret60: '%', retYTD: '%', w52c: '%', distHi: '%', distLo: '%',
   roe: '%', roa: '%', gm: '%', om: '%', npm: '%', revG: '%', earnG: '%',
   mktCap: '$', amount: '$', volume: 'sh', sharesOut: 'sh', floatShares: 'sh', floatCap: '$',
+  totalCash: '$', fcf: '$', shortFloat: '%', insiderPct: '%', instPct: '%', targetPrice: '$', upside: '%',
 };
 // enrichment-backed keys — filtering / showing any of these forces a full-universe enrich
 const ENRICH_KEYS = new Set(['ps', 'peg', 'payout', 'roe', 'roa', 'gm', 'om', 'npm',
-                             'revG', 'earnG', 'd2e', 'curRatio', 'beta', 'floatShares', 'floatCap']);
+                             'revG', 'earnG', 'd2e', 'curRatio', 'beta', 'floatShares', 'floatCap',
+                             'quickRatio', 'totalCash', 'fcf', 'shortFloat', 'insiderPct', 'instPct',
+                             'targetPrice', 'upside']);
 
 // parse "12", "3.5", "10B", "500m", "1.2T" -> number (null if not a number)
 function parseAmt(s){

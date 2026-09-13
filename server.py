@@ -265,6 +265,9 @@ def fetch_enrich(symbol):
             "payoutRatio": g(sd, "payoutRatio"),
             "fiftyTwoWeekChange": g(ks, "52WeekChange"),
             "floatShares": g(ks, "floatShares"),
+            "shortPercentOfFloat": g(ks, "shortPercentOfFloat"),
+            "heldPercentInsiders": g(ks, "heldPercentInsiders"),
+            "heldPercentInstitutions": g(ks, "heldPercentInstitutions"),
         }
         cache_put(key, out)
         return out
