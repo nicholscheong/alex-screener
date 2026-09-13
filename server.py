@@ -277,6 +277,74 @@ def fetch_enrich(symbol):
 
 
 # ----------------------------------------------------------------------------
+# moomoo/Futu OpenD portfolio bridge — LOCAL USE ONLY, read-only, no trading.
+#
+# This talks to moomoo's own OpenD gateway, which you run yourself on this same
+# machine (download it from moomoo, log into your account inside it). OpenD
+# then listens on a local port (11111 by default) that only this local Python
+# process can reach — nothing here goes over the network to anywhere else, and
+# nothing here can place an order: only position_list_query() is called.
+#
+# Requires:  pip install futu-api
+# (moomoo's SDK ships under the `futu` package name; the OpenD wire protocol
+# is shared between moomoo and Futu accounts.)
+#
+# This is intentionally never wired into the cloud deploy — it only matters
+# when server.py is run locally (Start Alex.bat) alongside a locally-running
+# OpenD, so a missing `futu` package or an unreachable OpenD just degrades to
+# "not connected" here instead of breaking anything else.
+try:
+    from futu import OpenSecTradeContext, TrdEnv, TrdMarket, SecurityFirm
+    _HAS_FUTU = True
+except ImportError:
+    _HAS_FUTU = False
+
+OPEND_HOST = os.environ.get("OPEND_HOST", "127.0.0.1")
+OPEND_PORT = int(os.environ.get("OPEND_PORT", "11111"))
+# Which brokerage entity OpenD was set up under — moomoo's own accounts are
+# typically SecurityFirm.FUTUSECURITIES in the SDK's enum (shared plumbing
+# with Futu). If your OpenD login is a different regional moomoo entity and
+# this returns a firm-mismatch error, swap this for the matching SecurityFirm.*
+# value (see moomoo's OpenAPI docs) or set OPEND_SECURITY_FIRM in the env.
+_FIRM_NAME = os.environ.get("OPEND_SECURITY_FIRM", "FUTUSECURITIES")
+
+
+def fetch_positions():
+    if not _HAS_FUTU:
+        return {"connected": False,
+                "error": "futu-api is not installed. Run:  pip install futu-api"}
+    try:
+        firm = getattr(SecurityFirm, _FIRM_NAME, SecurityFirm.FUTUSECURITIES)
+        trd_ctx = OpenSecTradeContext(host=OPEND_HOST, port=OPEND_PORT, security_firm=firm)
+    except Exception as e:
+        return {"connected": False, "error": "Could not reach OpenD at %s:%d — is it running? (%s)"
+                                              % (OPEND_HOST, OPEND_PORT, e)}
+    try:
+        ret, data = trd_ctx.position_list_query(trd_env=TrdEnv.REAL, market=TrdMarket.US)
+        if ret != 0:
+            return {"connected": False, "error": str(data)}
+        rows = data.to_dict("records") if hasattr(data, "to_dict") else list(data)
+        positions = [{
+            "symbol": (r.get("code") or "").split(".")[-1],
+            "name": r.get("stock_name"),
+            "qty": r.get("qty"),
+            "costPrice": r.get("cost_price"),
+            "price": r.get("nominal_price") or r.get("cur_price"),
+            "marketValue": r.get("market_val"),
+            "pl": r.get("pl_val"),
+            "plPct": r.get("pl_ratio"),
+        } for r in rows]
+        return {"connected": True, "positions": positions}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+    finally:
+        try:
+            trd_ctx.close()
+        except Exception:
+            pass
+
+
+# ----------------------------------------------------------------------------
 # HTTP handler
 # ----------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -341,6 +409,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         try:
             if route in ("/", "/home.html"):
                 return self._file("home.html", "text/html; charset=utf-8")
+            if route in ("/portfolio", "/portfolio.html"):
+                return self._file("portfolio.html", "text/html; charset=utf-8")
             if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
@@ -380,6 +450,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not sym:
                     return self._send(400, {"error": "symbol required"})
                 return self._send(200, fetch_enrich(sym))
+
+            if route == "/api/positions":
+                return self._send(200, fetch_positions())
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
