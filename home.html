@@ -47,14 +47,24 @@
   .intro-body{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:18px;
               padding:0 20px;text-align:center}
   .intro-mark{display:flex;align-items:baseline;gap:2px;font:800 15vw/1 var(--font);letter-spacing:-.03em;color:var(--fg);
-              max-font-size:120px}
+              max-font-size:120px;perspective:900px;transform-style:preserve-3d;
+              animation:markTilt 5s ease-in-out infinite}
   @media (min-width:520px){ .intro-mark{font-size:78px} }
-  .intro-mark span{display:inline-block;opacity:0;transform:translateY(.25em);filter:blur(6px);
-                    animation:letterIn .6s cubic-bezier(.16,1,.3,1) forwards}
+  .intro-mark span{display:inline-block;opacity:0;transform-origin:50% 100%;
+                    transform:rotateX(-100deg) translateZ(60px) translateY(.1em);
+                    text-shadow:0 0 26px rgba(91,147,246,.5);
+                    animation:letterIn3d .75s cubic-bezier(.2,.9,.25,1.1) forwards}
   .intro-mark .dot{width:.16em;height:.16em;border-radius:3px;background:var(--accent);margin-right:.06em;
-                    box-shadow:0 0 22px 2px var(--accent);opacity:0;animation:dotIn .5s ease forwards .05s}
-  @keyframes letterIn{to{opacity:1;transform:none;filter:blur(0)}}
-  @keyframes dotIn{to{opacity:1}}
+                    box-shadow:0 0 22px 2px var(--accent);opacity:0;transform:translateZ(80px) rotateY(0deg);
+                    animation:dotIn3d .6s ease forwards .05s,dotSpin 3.2s linear infinite 1s}
+  @keyframes letterIn3d{0%{opacity:0;transform:rotateX(-100deg) translateZ(60px) translateY(.1em)}
+                        55%{opacity:1}
+                        100%{opacity:1;transform:rotateX(0deg) translateZ(0) translateY(0)}}
+  @keyframes dotIn3d{to{opacity:1;transform:translateZ(0) rotateY(0deg)}}
+  @keyframes dotSpin{to{transform:translateZ(0) rotateY(360deg)}}
+  @keyframes markTilt{0%,100%{transform:rotateX(0deg) rotateY(0deg)}
+                       25%{transform:rotateX(4deg) rotateY(-6deg)}
+                       75%{transform:rotateX(-3deg) rotateY(6deg)}}
   .intro-rule{width:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent-line),transparent);
               animation:ruleIn .7s ease forwards .55s}
   @keyframes ruleIn{to{width:min(360px,70vw)}}
@@ -157,40 +167,53 @@
   window.addEventListener('resize', resize);
   resize();
 
-  var N = Math.min(70, Math.round(W * H / 16000));
+  // pseudo-3D network: points live in x/y/z space and drift toward the camera (z -> 0),
+  // then get recycled far away — classic perspective-projected starfield, no library needed.
+  var FOV = 260, ZMAX = 900;
+  var N = Math.min(160, Math.round(W * H / 7000));
   var pts = [];
-  for (var p = 0; p < N; p++){
-    pts.push({ x: Math.random() * W, y: Math.random() * H,
-               vx: (Math.random() - 0.5) * 0.18, vy: (Math.random() - 0.5) * 0.18 });
+  function spawn(p, fresh){
+    p.x = (Math.random() - 0.5) * W * 1.6;
+    p.y = (Math.random() - 0.5) * H * 1.6;
+    p.z = fresh ? Math.random() * ZMAX : ZMAX;
+    p.vz = 0.9 + Math.random() * 1.3;
   }
-  var raf, running = true;
-  function frame(){
+  for (var p = 0; p < N; p++){ var o = {}; spawn(o, true); pts.push(o); }
+  var raf, running = true, t0 = performance.now();
+  function project(pt){
+    var s = FOV / (FOV + pt.z);
+    return { x: W / 2 + pt.x * s, y: H / 2 + pt.y * s, s: s };
+  }
+  function frame(now){
     if (!running) return;
+    var dt = Math.min(2, (now - t0) / 16.7); t0 = now;
     ctx.clearRect(0, 0, W, H);
     for (var a = 0; a < pts.length; a++){
-      var pt = pts[a];
-      pt.x += pt.vx; pt.y += pt.vy;
-      if (pt.x < 0 || pt.x > W) pt.vx *= -1;
-      if (pt.y < 0 || pt.y > H) pt.vy *= -1;
+      pts[a].z -= pts[a].vz * dt;
+      if (pts[a].z <= 1) spawn(pts[a], false);
     }
+    var proj = pts.map(project);
     for (var a2 = 0; a2 < pts.length; a2++){
       for (var b = a2 + 1; b < pts.length; b++){
-        var dx = pts[a2].x - pts[b].x, dy = pts[a2].y - pts[b].y;
+        if (Math.abs(pts[a2].z - pts[b].z) > 90) continue;
+        var dx = proj[a2].x - proj[b].x, dy = proj[a2].y - proj[b].y;
         var d = Math.sqrt(dx * dx + dy * dy);
-        if (d < 130){
-          ctx.strokeStyle = 'rgba(91,147,246,' + ((1 - d / 130) * 0.35).toFixed(3) + ')';
-          ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(pts[a2].x, pts[a2].y); ctx.lineTo(pts[b].x, pts[b].y); ctx.stroke();
+        if (d < 90){
+          var op = (1 - d / 90) * Math.min(proj[a2].s, proj[b].s) * 0.55;
+          ctx.strokeStyle = 'rgba(91,147,246,' + op.toFixed(3) + ')';
+          ctx.lineWidth = Math.max(proj[a2].s, proj[b].s) * 1.1;
+          ctx.beginPath(); ctx.moveTo(proj[a2].x, proj[a2].y); ctx.lineTo(proj[b].x, proj[b].y); ctx.stroke();
         }
       }
     }
     for (var c = 0; c < pts.length; c++){
-      ctx.fillStyle = 'rgba(148,180,250,.55)';
-      ctx.beginPath(); ctx.arc(pts[c].x, pts[c].y, 1.4, 0, Math.PI * 2); ctx.fill();
+      var pr = proj[c];
+      ctx.fillStyle = 'rgba(148,180,250,' + Math.min(1, pr.s * 1.1).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(0.6, pr.s * 2.2), 0, Math.PI * 2); ctx.fill();
     }
     raf = requestAnimationFrame(frame);
   }
-  frame();
+  raf = requestAnimationFrame(frame);
 
   function dismiss(){
     if (!running) return;
