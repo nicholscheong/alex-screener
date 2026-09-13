@@ -16,6 +16,7 @@ import json
 import time
 import hmac
 import hashlib
+import secrets
 import threading
 import gzip
 import io
@@ -44,45 +45,99 @@ def log(*parts):
             pass
 
 # Local default is 127.0.0.1:8787. In the cloud, set PORT / HOST via env
-# (HOST=0.0.0.0). Set ALEX_USERNAME + ALEX_PASSWORD to lock it down: the site
-# is publicly reachable, but every page redirects to /login until you sign in
-# with those credentials, then stays signed in via a session cookie. Locally,
-# leaving these unset (the default) means no login gate at all -- the app is
-# already private just by being bound to 127.0.0.1.
+# (HOST=0.0.0.0). Two ways to lock the site down, either or both:
+#   - ALEX_USERNAME + ALEX_PASSWORD: a single owner login.
+#   - GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET: "Sign in with Google" -- any
+#     Google account may sign in (there's no allowlist; this app has no
+#     concept of rejecting a Google identity, only of scoping each user's own
+#     data to their own account -- see the Telegram bridge below).
+# Whichever way someone signs in, every page redirects to /login until they
+# do, then they stay signed in via a session cookie. Locally, leaving all of
+# these unset (the default) means no login gate at all -- the app is already
+# private just by being bound to 127.0.0.1.
 PORT = int(os.environ.get("PORT", "8787"))
 HOST = os.environ.get("HOST", "127.0.0.1")
 USERNAME = os.environ.get("ALEX_USERNAME", "").strip()
 PASSWORD = os.environ.get("ALEX_PASSWORD", "").strip()
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
 
+
+def _login_required():
+    return bool((USERNAME and PASSWORD) or (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET))
+
+
 # Session cookies are HMAC-signed rather than stored server-side, so any
-# machine behind the load balancer can verify one without shared state. The
-# signing key is derived from the password itself -- nothing extra to
-# configure, and it changes automatically if the password ever does.
-_SESSION_KEY = hashlib.sha256(("alex-session:" + PASSWORD).encode("utf-8")).digest()
+# machine behind the load balancer can verify one without shared state.
+# ALEX_SECRET_KEY is the recommended signing key; if unset it falls back to
+# the password (fine for password-only setups, but Google-only setups should
+# set ALEX_SECRET_KEY explicitly since there's no password to derive from).
+_SECRET_KEY = os.environ.get("ALEX_SECRET_KEY", "").strip() or PASSWORD or "alex-dev-key"
+_SESSION_KEY = hashlib.sha256(("alex-session:" + _SECRET_KEY).encode("utf-8")).digest()
 _SESSION_MAX_AGE = 31536000  # 1 year, matches the cookie's Max-Age
 
 
-def _make_session_cookie():
-    payload = USERNAME + "|" + str(int(time.time()) + _SESSION_MAX_AGE)
+def _make_session_cookie(user_id):
+    payload = user_id + "|" + str(int(time.time()) + _SESSION_MAX_AGE)
     sig = hmac.new(_SESSION_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return payload + "." + sig
 
 
 def _verify_session_cookie(value):
+    """Returns the signed-in user's id (email, or the login username), or None."""
     if not value or "." not in value:
-        return False
+        return None
     payload, _, sig = value.rpartition(".")
     expected = hmac.new(_SESSION_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
-        return False
+        return None
     try:
         user, expiry = payload.rsplit("|", 1)
-        return user == USERNAME and int(expiry) >= time.time()
+        return user if int(expiry) >= time.time() else None
     except ValueError:
-        return False
+        return None
+
+
+# ----------------------------------------------------------------------------
+# "Sign in with Google" -- any Google account may sign in; there's no
+# allowlist. Requires a Google Cloud OAuth 2.0 Client (Web application) set up
+# by hand at https://console.cloud.google.com/apis/credentials, with this
+# app's /api/auth/google/callback URL added as an authorized redirect URI.
+# ----------------------------------------------------------------------------
+def _google_auth_url(redirect_uri, state):
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+
+
+def _google_exchange_code(code, redirect_uri):
+    data = urllib.parse.urlencode({
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }).encode("utf-8")
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def _google_userinfo(access_token):
+    req = urllib.request.Request("https://www.googleapis.com/oauth2/v3/userinfo",
+                                  headers={"Authorization": "Bearer " + access_token, "User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
 
 # ----------------------------------------------------------------------------
 # Yahoo credentials (cookie + crumb) manager
@@ -568,22 +623,26 @@ def start_opend_setup():
 # calls Telegram's sendMessage API with text you already see on screen.
 #
 # The bot token is a real credential (whoever has it can control the bot), so
-# it's kept in a local JSON file next to server.py, gitignored, and never
-# echoed back in any API response once saved.
-_TG_CONFIG_PATH = os.path.join(ROOT, "telegram.json")
+# it's kept in a local JSON file next to server.py (gitignored) and never
+# echoed back in any API response once saved. Since sign-in now allows any
+# Google account, this is keyed per signed-in user -- one file holding
+# {user_id: {token, chatId, botUsername}}, so different people's bots stay
+# separate. "local" is the key used when no login is configured at all
+# (single-machine local runs, matching the previous single-user behavior).
+_TG_STORE_PATH = os.path.join(ROOT, "telegram.json")
 _tg_lock = threading.Lock()
 
 
-def _tg_load():
+def _tg_load_all():
     try:
-        with open(_TG_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(_TG_STORE_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {}
 
 
-def _tg_save(data):
-    with open(_TG_CONFIG_PATH, "w", encoding="utf-8") as f:
+def _tg_save_all(data):
+    with open(_TG_STORE_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
 
@@ -604,7 +663,7 @@ def _tg_call(token, method, params=None):
             return {"ok": False, "description": str(e)}
 
 
-def connect_telegram(token):
+def connect_telegram(user_id, token):
     token = (token or "").strip()
     if not token:
         return {"connected": False, "error": "token required"}
@@ -626,31 +685,33 @@ def connect_telegram(token):
             return {"connected": False, "error": "could not find a chat id in your most recent message"}
 
         with _tg_lock:
-            _tg_save({"token": token, "chatId": chat_id, "botUsername": username})
+            all_cfg = _tg_load_all()
+            all_cfg[user_id] = {"token": token, "chatId": chat_id, "botUsername": username}
+            _tg_save_all(all_cfg)
         _tg_call(token, "sendMessage", {"chat_id": chat_id, "text": "✅ Connected to Alex."})
         return {"connected": True, "botUsername": username}
     except Exception as e:
         return {"connected": False, "error": str(e)}
 
 
-def telegram_status():
-    cfg = _tg_load()
+def telegram_status(user_id):
+    cfg = _tg_load_all().get(user_id) or {}
     if not cfg.get("token"):
         return {"connected": False}
     return {"connected": True, "botUsername": cfg.get("botUsername")}
 
 
-def disconnect_telegram():
+def disconnect_telegram(user_id):
     with _tg_lock:
-        try:
-            os.remove(_TG_CONFIG_PATH)
-        except OSError:
-            pass
+        all_cfg = _tg_load_all()
+        if user_id in all_cfg:
+            del all_cfg[user_id]
+            _tg_save_all(all_cfg)
     return {"connected": False}
 
 
-def send_telegram_message(text):
-    cfg = _tg_load()
+def send_telegram_message(user_id, text):
+    cfg = _tg_load_all().get(user_id) or {}
     if not cfg.get("token"):
         return {"ok": False, "error": "Telegram is not connected."}
     try:
@@ -691,14 +752,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with open(path, "rb") as f:
             self._send(200, f.read(), ctype)
 
-    def _authed(self):
-        if not (USERNAME and PASSWORD):
-            return True
-        cookie_header = self.headers.get("Cookie", "")
-        for part in cookie_header.split(";"):
+    def _get_cookie(self, name):
+        for part in self.headers.get("Cookie", "").split(";"):
             part = part.strip()
-            if part.startswith("alex_session=") and _verify_session_cookie(part[len("alex_session="):]):
-                return True
+            if part.startswith(name + "="):
+                return part[len(name) + 1:]
+        return None
+
+    def _current_user(self):
+        """The signed-in user's id (their email, or the login username), or None."""
+        raw = self._get_cookie("alex_session")
+        return _verify_session_cookie(raw) if raw else None
+
+    def _authed(self):
+        if not _login_required():
+            return True
+        if self._current_user():
+            return True
         if self.command == "GET":
             dest = "/login?next=" + urllib.parse.quote(self.path, safe="")
             self.send_response(302)
@@ -714,15 +784,76 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Set-Cookie", "alex_session=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s"
                                         % (value, max_age, secure))
 
+    def _base_url(self):
+        proto = "https" if self.headers.get("X-Forwarded-Proto") == "https" else "http"
+        return "%s://%s" % (proto, self.headers.get("Host", "127.0.0.1"))
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
         route = u.path
-        if route not in ("/api/health", "/login", "/login.html", "/favicon.ico") and not self._authed():
+        _public = ("/api/health", "/login", "/login.html", "/favicon.ico",
+                   "/api/auth/google/start", "/api/auth/google/callback")
+        if route not in _public and not self._authed():
             return
         try:
             if route in ("/login", "/login.html"):
                 return self._file("login.html", "text/html; charset=utf-8")
+
+            if route == "/api/auth/google/start":
+                if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+                    self.send_response(302)
+                    self.send_header("Location", "/login?error=" + urllib.parse.quote("Google sign-in isn't configured."))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                state = secrets.token_urlsafe(24)
+                next_path = (q.get("next") or ["/"])[0]
+                redirect_uri = self._base_url() + "/api/auth/google/callback"
+                self.send_response(302)
+                self.send_header("Location", _google_auth_url(redirect_uri, state))
+                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+                self.send_header("Set-Cookie", "alex_oauth_state=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=600%s" % (state, secure))
+                self.send_header("Set-Cookie", "alex_oauth_next=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=600%s" % (urllib.parse.quote(next_path, safe=""), secure))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if route == "/api/auth/google/callback":
+                def _fail(msg):
+                    self.send_response(302)
+                    self.send_header("Location", "/login?error=" + urllib.parse.quote(msg))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                code = (q.get("code") or [""])[0]
+                state = (q.get("state") or [""])[0]
+                expected_state = self._get_cookie("alex_oauth_state")
+                if not code or not state or not expected_state or not hmac.compare_digest(state, expected_state):
+                    return _fail("Google sign-in failed (state mismatch) — please try again.")
+                try:
+                    redirect_uri = self._base_url() + "/api/auth/google/callback"
+                    tokens = _google_exchange_code(code, redirect_uri)
+                    access_token = tokens.get("access_token")
+                    if not access_token:
+                        return _fail(tokens.get("error_description") or "Google sign-in failed.")
+                    info = _google_userinfo(access_token)
+                    email = info.get("email")
+                    if not email or not info.get("email_verified"):
+                        return _fail("Your Google account has no verified email.")
+                except Exception as e:
+                    return _fail("Google sign-in failed: %s" % e)
+                next_path = urllib.parse.unquote(self._get_cookie("alex_oauth_next") or "/")
+                if not next_path.startswith("/"):
+                    next_path = "/"
+                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+                self.send_response(302)
+                self.send_header("Location", next_path)
+                self.send_header("Set-Cookie", "alex_session=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s"
+                                                % (_make_session_cookie(email), _SESSION_MAX_AGE, secure))
+                self.send_header("Set-Cookie", "alex_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0%s" % secure)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             if route in ("/", "/home.html"):
                 return self._file("home.html", "text/html; charset=utf-8")
             if route in ("/portfolio", "/portfolio.html"):
@@ -796,7 +927,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"connected": _opend_port_open()})
 
             if route == "/api/telegram/status":
-                return self._send(200, telegram_status())
+                return self._send(200, telegram_status(self._current_user() or "local"))
+
+            if route == "/api/whoami":
+                user = self._current_user()
+                return self._send(200, {"user": user})
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
@@ -832,7 +967,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = json.dumps({"ok": True}).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
-                self._set_session_cookie(_make_session_cookie(), _SESSION_MAX_AGE)
+                self._set_session_cookie(_make_session_cookie(USERNAME or "local"), _SESSION_MAX_AGE)
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)
@@ -850,20 +985,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if not self._authed():
                 return
+            user_id = self._current_user() or "local"
 
             if route == "/api/telegram/connect":
                 body = self._json_body()
-                return self._send(200, connect_telegram(body.get("token")))
+                return self._send(200, connect_telegram(user_id, body.get("token")))
 
             if route == "/api/telegram/disconnect":
-                return self._send(200, disconnect_telegram())
+                return self._send(200, disconnect_telegram(user_id))
 
             if route == "/api/telegram/send":
                 body = self._json_body()
                 text = (body.get("text") or "").strip()
                 if not text:
                     return self._send(400, {"error": "text required"})
-                return self._send(200, send_telegram_message(text))
+                return self._send(200, send_telegram_message(user_id, text))
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:

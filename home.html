@@ -25,6 +25,7 @@
   .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
   .logo small{font:600 9.5px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-left:2px}
   .grow{flex:1}
+  .whoami{font-size:12px;color:var(--fg3);margin-right:14px}
   .logout{font-size:12px;color:var(--fg3);text-decoration:none}
   .logout:hover{color:var(--fg2)}
 
@@ -120,7 +121,8 @@
 <header>
   <div class="logo"><span>Alex</span><small>Home</small></div>
   <div class="grow"></div>
-  <a class="logout" href="#" id="logoutLink">Log out</a>
+  <span class="whoami" id="whoami" hidden></span>
+  <a class="logout" href="#" id="logoutLink" hidden>Log out</a>
 </header>
 <div class="mini-row">
   <div class="mini-card" id="connectCard" tabindex="0" role="button" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
@@ -281,6 +283,13 @@ document.getElementById('logoutLink').addEventListener('click', function(e){
   e.preventDefault();
   fetch('/api/logout', { method: 'POST' }).then(function(){ window.location.href = '/login'; });
 });
+
+fetch('/api/whoami').then(function(r){ return r.json(); }).then(function(d){
+  if (!d.user) return;
+  document.getElementById('whoami').hidden = false;
+  document.getElementById('whoami').textContent = d.user;
+  document.getElementById('logoutLink').hidden = false;
+}).catch(function(){});
 
 (function(){
   var card = document.getElementById('connectCard');
