@@ -176,6 +176,7 @@ QUOTE_FIELDS = ",".join([
     "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyTwoWeekChangePercent",
     "averageAnalystRating", "preMarketPrice", "preMarketChangePercent",
     "postMarketPrice", "postMarketChangePercent", "marketState",
+    "bid", "ask", "bidSize", "askSize",
 ])
 
 

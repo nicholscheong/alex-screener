@@ -41,7 +41,7 @@
   ::-webkit-scrollbar-track{background:transparent}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
 
-  #app{display:flex;flex-direction:column;height:100%}
+  #app{display:flex;flex-direction:row;height:100%}
 
   /* ---- header ---- */
   header{display:flex;align-items:center;gap:14px;height:52px;padding:0 16px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
@@ -245,32 +245,35 @@
   .backdrop{position:fixed;inset:0;background:rgba(4,6,10,.46);z-index:49;opacity:0;pointer-events:none;transition:opacity .2s}
   .backdrop.on{opacity:1;pointer-events:auto}
 
-  /* ---- saved screens (combo list / builder bar) ---- */
-  #comboScreen{display:flex;flex-direction:column;height:100%}
-  #comboScreen[hidden]{display:none}
-  #tableScreen{display:flex;flex-direction:column;height:100%}
-  #tableScreen[hidden]{display:none}
-  #comboBody{flex:1;overflow:auto;padding:44px 24px 64px}
-  .cs-wrap{max-width:720px;margin:0 auto}
-  .cs-head h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em;color:var(--fg)}
-  .cs-sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5}
-  #comboListWrap{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
-  .cs-empty{padding:34px 20px;text-align:center;color:var(--fg3);font-size:13px;border:1px dashed var(--line-strong);border-radius:var(--r-lg)}
-  .cs-card{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;cursor:pointer;transition:border-color .12s,background .12s}
-  .cs-card:hover{border-color:var(--accent-line);background:var(--bg3)}
-  .cs-card-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-  .cs-name{font-size:14px;font-weight:600;color:var(--fg)}
-  .cs-del{margin-left:auto;background:none;border:none;color:var(--fg3);font-size:16px;line-height:1;padding:2px 5px;border-radius:var(--r-sm)}
-  .cs-del:hover{color:var(--down);background:var(--down-bg)}
-  .cs-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
-  .cs-chip{display:inline-block;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r-pill);padding:2px 9px;font-size:11px}
-  .cs-meta{font-size:11px;color:var(--fg3)}
-  .btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--accent);border:1px solid var(--accent);color:#08111f;border-radius:var(--r);padding:9px 16px;font-size:13px;font-weight:650}
-  .btn-primary:hover{background:#6ea0f8}
+  /* ---- sidebar: saved screens, always visible next to the table ---- */
+  #sidebar{width:230px;flex:none;display:flex;flex-direction:column;background:var(--bg1);border-right:1px solid var(--line);height:100%}
+  .sb-head{flex:none;display:flex;align-items:center;height:52px;padding:0 14px;border-bottom:1px solid var(--line)}
+  #newComboBtn{flex:none;margin:12px 14px;background:var(--accent-bg);border:1px solid var(--accent-line);color:var(--accent-fg);
+               border-radius:var(--r);padding:8px 10px;font-size:12.5px;font-weight:650;text-align:left}
+  #newComboBtn:hover{background:color-mix(in srgb,var(--accent) 18%,var(--bg2))}
+  #sidebarList{flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px}
+  .sb-empty{padding:16px 10px;color:var(--fg3);font-size:11.5px;line-height:1.5}
+  .sb-row{display:flex;align-items:center;gap:6px;padding:8px 9px;border-radius:var(--r);cursor:pointer;color:var(--fg2)}
+  .sb-row:hover{background:var(--bg2);color:var(--fg)}
+  .sb-row.on{background:var(--accent-bg);color:var(--accent-fg)}
+  .sb-row .sb-name{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sb-row .sb-del{flex:none;background:none;border:none;color:var(--fg3);font-size:14px;line-height:1;padding:1px 3px;opacity:0}
+  .sb-row:hover .sb-del{opacity:1}
+  .sb-row .sb-del:hover{color:var(--down)}
+
+  /* ---- main area (right of the sidebar) ---- */
+  #mainArea{flex:1;display:flex;flex-direction:column;min-width:0;height:100%}
   #comboBar{flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--bg1);border-bottom:1px solid var(--line)}
   #comboBar .cb-name{font-size:12.5px;font-weight:600;color:var(--fg2)}
+  .btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--accent);border:1px solid var(--accent);color:#08111f;border-radius:var(--r);padding:9px 16px;font-size:13px;font-weight:650}
+  .btn-primary:hover{background:#6ea0f8}
   .logo{cursor:pointer}
   .logo:hover{text-decoration:none}
+
+  /* ---- market index strip (status bar) ---- */
+  #indices{display:flex;align-items:center;gap:14px;flex:none}
+  #indices .ix{display:flex;align-items:center;gap:5px;white-space:nowrap}
+  #indices .ix b{color:var(--fg);font-weight:600}
 
   /* ---- generic centered modal (name prompt) ---- */
   .modal{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,.62);backdrop-filter:blur(3px)}
@@ -283,27 +286,14 @@
 </head>
 <body>
 <div id="app">
-  <div id="comboScreen">
-    <header>
-      <a class="logo" href="/"><span>Alex</span><small>Equity Screener</small></a>
-      <div class="grow"></div>
-      <a class="btn" href="/">⌂ Home</a>
-    </header>
-    <div id="comboBody">
-      <div class="cs-wrap">
-        <div class="cs-head">
-          <h1>Stock Screener</h1>
-          <p class="cs-sub">Saved indicator combinations. Open one to see the indicators and the stocks they select, or build a new one.</p>
-        </div>
-        <div id="comboListWrap"></div>
-        <button class="btn-primary" id="newComboBtn">+ New Screen</button>
-      </div>
-    </div>
+  <div id="sidebar">
+    <div class="sb-head"><a class="logo" href="/"><span>Alex</span><small>Screener</small></a></div>
+    <button id="newComboBtn">+ New Screener</button>
+    <div id="sidebarList"></div>
   </div>
 
-  <div id="tableScreen" hidden>
+  <div id="mainArea">
     <header>
-      <a class="logo" href="/"><span>Alex</span><small>Equity Screener</small></a>
       <div class="mstat"><span class="dot" id="mdot"></span><span id="mtext">Connecting…</span></div>
       <div class="grow"></div>
       <div class="ctl">
@@ -328,7 +318,6 @@
     </header>
 
     <div id="comboBar" hidden>
-      <button class="btn" id="backToCombos">← Back to Screens</button>
       <span id="comboBarName" class="cb-name"></span>
       <span class="grow"></span>
       <button class="btn-primary" id="saveComboBtn" hidden>💾 Save Screen</button>
@@ -353,6 +342,7 @@
       <span id="tfProg"></span>
       <div class="prog"><i id="progbar"></i></div>
       <span class="grow"></span>
+      <div id="indices"></div>
       <span id="updated">—</span>
       <span id="next"></span>
     </div>
@@ -618,6 +608,10 @@ const COLS = [
   { k: 'symbol', t: 'Ticker', g: '', sticky: 1, fmt: r => r.symbol, sort: r => r.symbol, str: 1 },
   { k: 'name', t: 'Name', g: '', sticky: 2, fmt: r => `<span class="nm" title="${r.name||''}">${r.name||''}</span>`, sort: r => r.name || '', str: 1 },
   { k: 'price', t: 'Price', g: 'Market', fmt: r => nf(r.price, 2), sort: r => r.price },
+  { k: 'bid', t: 'Bid', g: 'Market', fmt: r => nf(r.bid, 2), sort: r => r.bid },
+  { k: 'ask', t: 'Ask', g: 'Market', fmt: r => nf(r.ask, 2), sort: r => r.ask },
+  { k: 'bidSize', t: 'Bid size', g: 'Market', fmt: r => fmtBig(r.bidSize), sort: r => r.bidSize },
+  { k: 'askSize', t: 'Ask size', g: 'Market', fmt: r => fmtBig(r.askSize), sort: r => r.askSize },
   { k: 'chgPct', t: 'Chg %', g: 'Market', fmt: r => pct(r.chgPct), cls: r => sgn(r.chgPct), sort: r => r.chgPct },
   { k: 'shapeSim', t: 'Pattern sim', g: '', fmt: r => r.shapeSim != null ? r.shapeSim.toFixed(1) : null,
     cls: r => r.shapeSim == null ? '' : (r.shapeSim >= 60 ? 'up' : r.shapeSim >= 35 ? '' : 'down'),
@@ -802,7 +796,8 @@ const NO_FILTER = new Set(['symbol', 'name', 'sector', 'spark', 'signals', 'anal
 const PCT100 = new Set(['roe', 'roa', 'gm', 'om', 'npm', 'revG', 'earnG', 'payout']);
 // unit hint shown next to the filter inputs
 const FUNIT = {
-  price: '$', chgPct: '%', amp: '%', turnover: '%', divYield: '%', payout: '%',
+  price: '$', bid: '$', ask: '$', bidSize: 'sh', askSize: 'sh',
+  chgPct: '%', amp: '%', turnover: '%', divYield: '%', payout: '%',
   ret5: '%', ret20: '%', ret60: '%', retYTD: '%', w52c: '%', distHi: '%', distLo: '%',
   roe: '%', roa: '%', gm: '%', om: '%', npm: '%', revG: '%', earnG: '%',
   mktCap: '$', amount: '$', volume: 'sh', sharesOut: 'sh', floatShares: 'sh', floatCap: '$',
@@ -1692,57 +1687,30 @@ function applySnapshot(snap){
 }
 function deleteCombo(id){
   saveCombosList(loadCombos().filter(c => c.id !== id));
-  renderComboList();
+  if (state.activeComboId === id) startNewCombo();
+  else renderSidebarList();
 }
-function renderComboList(){
-  const wrap = $('#comboListWrap');
+// sidebar: the saved-screens list lives next to the table at all times (no separate page) —
+// clicking a row loads that combo's columns/filters straight into the live table.
+function renderSidebarList(){
+  const wrap = $('#sidebarList');
   wrap.innerHTML = '';
   const combos = loadCombos().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   if (!combos.length){
-    wrap.appendChild(el('div', 'cs-empty', 'No saved screens yet — click "+ New Screen" below to build your first one.'));
+    wrap.appendChild(el('div', 'sb-empty', 'No saved screens yet — click "+ New Screener" above to build your first one.'));
     return;
   }
   combos.forEach(c => {
-    const card = el('div', 'cs-card');
-    const head = el('div', 'cs-card-head');
-    head.appendChild(el('span', 'cs-name', c.name));
-    const del = el('button', 'cs-del', '×');
+    const row = el('div', 'sb-row' + (state.activeComboId === c.id ? ' on' : ''));
+    row.title = c.name;
+    row.appendChild(el('span', 'sb-name', c.name));
+    const del = el('button', 'sb-del', '×');
     del.title = 'Delete this screen';
     del.onclick = e => { e.stopPropagation(); if (confirm(`Delete "${c.name}"?`)) deleteCombo(c.id); };
-    head.appendChild(del);
-    card.appendChild(head);
-
-    const chips = el('div', 'cs-chips');
-    const cols = c.visibleCols || [];
-    cols.slice(0, 8).forEach(k => {
-      const col = colByKey(k);
-      if (col) chips.appendChild(el('span', 'cs-chip', col.t));
-    });
-    (c.sigFilter || []).forEach(sk => {
-      const s = SIGNALS.find(x => x[0] === sk);
-      if (s) chips.appendChild(el('span', 'cs-chip', s[1].replace(/\s*\(.*?\)/, '')));
-    });
-    (c.macdConds || []).forEach(cond => chips.appendChild(el('span', 'cs-chip', macdCondLabel(cond))));
-    if (cols.length > 8) chips.appendChild(el('span', 'cs-chip', '+' + (cols.length - 8) + ' more'));
-    if (!chips.children.length) chips.appendChild(el('span', 'cs-chip', 'No indicators yet'));
-    card.appendChild(chips);
-
-    const n = cols.length + (c.sigFilter || []).length + (c.macdConds || []).length;
-    card.appendChild(el('div', 'cs-meta', `${n} indicator${n === 1 ? '' : 's'} · saved ${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}`));
-    card.onclick = () => openCombo(c.id);
-    wrap.appendChild(card);
+    row.appendChild(del);
+    row.onclick = () => openCombo(c.id);
+    wrap.appendChild(row);
   });
-}
-function showComboScreen(){
-  state.screen = 'combos';
-  $('#tableScreen').hidden = true;
-  $('#comboScreen').hidden = false;
-  renderComboList();
-}
-function showTableScreen(){
-  state.screen = 'table';
-  $('#comboScreen').hidden = true;
-  $('#tableScreen').hidden = false;
 }
 function openCombo(id){
   const c = loadCombos().find(x => x.id === id);
@@ -1752,7 +1720,7 @@ function openCombo(id){
   $('#comboBarName').textContent = c.name;
   $('#saveComboBtn').hidden = true;
   $('#comboBar').hidden = false;
-  showTableScreen();
+  renderSidebarList();
   afterIndChange();
 }
 function startNewCombo(){
@@ -1761,12 +1729,8 @@ function startNewCombo(){
   $('#comboBarName').textContent = 'New screen (unsaved)';
   $('#saveComboBtn').hidden = false;
   $('#comboBar').hidden = false;
-  showTableScreen();
+  renderSidebarList();
   setTimeout(() => { $('#indSearch').focus(); openIndDrop(); }, 0);
-}
-function backToCombos(){
-  if (state.activeComboId == null && state.visibleCols.length && !confirm('Discard this unsaved screen?')) return;
-  showComboScreen();
 }
 function openNameModal(){
   $('#comboNameInput').value = '';
@@ -1784,7 +1748,9 @@ function confirmSaveCombo(){
   const list = loadCombos(); list.push(combo); saveCombosList(list);
   closeNameModal();
   state.activeComboId = combo.id;
-  showComboScreen();
+  $('#comboBarName').textContent = combo.name;
+  $('#saveComboBtn').hidden = true;
+  renderSidebarList();
 }
 
 //////////////////// spark svg ////////////////////
@@ -1909,6 +1875,7 @@ function applyQuote(r, q){
   r.distLo52q = (r.w52Low && r.price != null) ? (r.price - r.w52Low) / r.w52Low * 100 : null;
   r.ma50q = q.fiftyDayAverage; r.ma200q = q.twoHundredDayAverage;
   r.shares = q.sharesOutstanding;
+  r.bid = q.bid; r.ask = q.ask; r.bidSize = q.bidSize; r.askSize = q.askSize;
   r.analyst = q.averageAnalystRating;
   r.recMean = q.averageAnalystRating ? parseFloat(q.averageAnalystRating) : null;
   r.marketState = q.marketState;
@@ -1929,6 +1896,28 @@ async function loadQuotes(){
   }
   render();
   return n;
+}
+
+// major-index strip in the status bar — same /api/quotes proxy, just index tickers instead of stocks
+const INDICES = [['^DJI', 'Dow'], ['^IXIC', 'Nasdaq'], ['^GSPC', 'S&P 500']];
+async function loadIndices(){
+  try {
+    const syms = INDICES.map(x => x[0]);
+    const data = await jget('/api/quotes?symbols=' + encodeURIComponent(syms.join(',')));
+    const box = $('#indices');
+    box.innerHTML = '';
+    INDICES.forEach(([sym, label]) => {
+      const q = data.quotes[sym];
+      if (!q) return;
+      const chg = q.regularMarketChangePercent;
+      const ix = el('span', 'ix');
+      ix.appendChild(el('span', null, label));
+      ix.appendChild(el('b', null, nf(q.regularMarketPrice, 2)));
+      const c = el('span', sgn(chg), pct(chg, 2));
+      ix.appendChild(c);
+      box.appendChild(ix);
+    });
+  } catch(e){ /* status strip only — fail quietly */ }
 }
 
 const CACHE_KEY = 'alex_hist_v2';   // v2 adds open price (o) for candlesticks
@@ -2415,7 +2404,7 @@ function scheduleRefresh(){
   nextTick = Date.now() + ms;
   state.timer = setInterval(async () => {
     nextTick = Date.now() + ms;
-    try { await loadQuotes(); queueEnrichVisible(); } catch(e){ console.warn(e); }
+    try { await loadQuotes(); queueEnrichVisible(); loadIndices(); } catch(e){ console.warn(e); }
   }, ms);
 }
 setInterval(() => {
@@ -2463,7 +2452,6 @@ async function init(){
   persist();   // write back any migrated / cleaned state
 
   $('#newComboBtn').onclick = startNewCombo;
-  $('#backToCombos').onclick = backToCombos;
   $('#saveComboBtn').onclick = openNameModal;
   $('#nameModalClose').onclick = closeNameModal;
   $('#comboNameCancel').onclick = closeNameModal;
@@ -2472,8 +2460,16 @@ async function init(){
     if (e.key === 'Enter'){ e.preventDefault(); confirmSaveCombo(); }
     if (e.key === 'Escape') closeNameModal();
   });
-  renderComboList();
-  showComboScreen();
+  renderSidebarList();
+  // land on the most recently saved screen if one exists, otherwise start with a blank one
+  const startCombos = loadCombos();
+  if (startCombos.length){
+    openCombo(startCombos.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0].id);
+  } else {
+    $('#comboBarName').textContent = 'New screen (unsaved)';
+    $('#saveComboBtn').hidden = false;
+    $('#comboBar').hidden = false;
+  }
 
   $('#refreshNow').onclick = () => loadQuotes().then(queueEnrichVisible);
   $('#exportCsv').onclick = exportCsv;
@@ -2526,6 +2522,7 @@ async function init(){
   try { await loadQuotes(); } catch(e){ $('#loadmsg').textContent = 'Quote load failed: ' + e.message; }
   scheduleRefresh();
   queueEnrichVisible();
+  loadIndices();
 
   loadCharts().then(() => { render(); });          // technicals in background
 }
