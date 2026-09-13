@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.error
 import json
 import time
+import hmac
+import hashlib
 import threading
 import gzip
 import io
@@ -42,14 +44,45 @@ def log(*parts):
             pass
 
 # Local default is 127.0.0.1:8787. In the cloud, set PORT / HOST via env
-# (HOST=0.0.0.0). Set ALEX_TOKEN="some-secret" to lock it down: the first visit
-# must be  https://your-app/?key=<token>  (it drops a cookie and redirects).
+# (HOST=0.0.0.0). Set ALEX_USERNAME + ALEX_PASSWORD to lock it down: the site
+# is publicly reachable, but every page redirects to /login until you sign in
+# with those credentials, then stays signed in via a session cookie. Locally,
+# leaving these unset (the default) means no login gate at all -- the app is
+# already private just by being bound to 127.0.0.1.
 PORT = int(os.environ.get("PORT", "8787"))
 HOST = os.environ.get("HOST", "127.0.0.1")
-TOKEN = os.environ.get("ALEX_TOKEN", "").strip()
+USERNAME = os.environ.get("ALEX_USERNAME", "").strip()
+PASSWORD = os.environ.get("ALEX_PASSWORD", "").strip()
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+# Session cookies are HMAC-signed rather than stored server-side, so any
+# machine behind the load balancer can verify one without shared state. The
+# signing key is derived from the password itself -- nothing extra to
+# configure, and it changes automatically if the password ever does.
+_SESSION_KEY = hashlib.sha256(("alex-session:" + PASSWORD).encode("utf-8")).digest()
+_SESSION_MAX_AGE = 31536000  # 1 year, matches the cookie's Max-Age
+
+
+def _make_session_cookie():
+    payload = USERNAME + "|" + str(int(time.time()) + _SESSION_MAX_AGE)
+    sig = hmac.new(_SESSION_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return payload + "." + sig
+
+
+def _verify_session_cookie(value):
+    if not value or "." not in value:
+        return False
+    payload, _, sig = value.rpartition(".")
+    expected = hmac.new(_SESSION_KEY, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return False
+    try:
+        user, expiry = payload.rsplit("|", 1)
+        return user == USERNAME and int(expiry) >= time.time()
+    except ValueError:
+        return False
 
 # ----------------------------------------------------------------------------
 # Yahoo credentials (cookie + crumb) manager
@@ -659,39 +692,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(200, f.read(), ctype)
 
     def _authed(self):
-        if not TOKEN:
+        if not (USERNAME and PASSWORD):
             return True
-        u = urllib.parse.urlparse(self.path)
-        if ("alex=" + TOKEN) in self.headers.get("Cookie", "").replace(" ", ""):
-            return True
-        # first visit: /...?key=<token>  -> set a cookie and redirect to a clean URL
-        if urllib.parse.parse_qs(u.query).get("key", [""])[0] == TOKEN:
-            secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        cookie_header = self.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("alex_session=") and _verify_session_cookie(part[len("alex_session="):]):
+                return True
+        if self.command == "GET":
+            dest = "/login?next=" + urllib.parse.quote(self.path, safe="")
             self.send_response(302)
-            self.send_header("Set-Cookie",
-                             "alex=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000%s" % (TOKEN, secure))
-            self.send_header("Location", u.path or "/")
+            self.send_header("Location", dest)
             self.send_header("Content-Length", "0")
             self.end_headers()
-            return False
-        msg = b"Alex is private. Open it once as this URL with  ?key=YOUR_TOKEN  appended."
-        self.send_response(401)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(msg)))
-        self.end_headers()
-        try:
-            self.wfile.write(msg)
-        except Exception:
-            pass
+        else:
+            self._send(401, {"error": "unauthorized"})
         return False
+
+    def _set_session_cookie(self, value, max_age):
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        self.send_header("Set-Cookie", "alex_session=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s"
+                                        % (value, max_age, secure))
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
         route = u.path
-        if route != "/api/health" and not self._authed():
+        if route not in ("/api/health", "/login", "/login.html", "/favicon.ico") and not self._authed():
             return
         try:
+            if route in ("/login", "/login.html"):
+                return self._file("login.html", "text/html; charset=utf-8")
             if route in ("/", "/home.html"):
                 return self._file("home.html", "text/html; charset=utf-8")
             if route in ("/portfolio", "/portfolio.html"):
@@ -789,9 +820,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
         route = u.path
-        if not self._authed():
-            return
         try:
+            if route == "/api/login":
+                body = self._json_body()
+                ok = (not (USERNAME and PASSWORD)) or (
+                    body.get("username") == USERNAME
+                    and hmac.compare_digest(str(body.get("password") or ""), PASSWORD)
+                )
+                if not ok:
+                    return self._send(401, {"ok": False, "error": "Invalid username or password."})
+                payload = json.dumps({"ok": True}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._set_session_cookie(_make_session_cookie(), _SESSION_MAX_AGE)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            if route == "/api/logout":
+                payload = json.dumps({"ok": True}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self._set_session_cookie("", 0)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+
+            if not self._authed():
+                return
+
             if route == "/api/telegram/connect":
                 body = self._json_body()
                 return self._send(200, connect_telegram(body.get("token")))
