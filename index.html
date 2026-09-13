@@ -334,6 +334,7 @@
         </label>
         <button class="btn" id="refreshNow">↻ Now</button>
         <button class="btn" id="exportCsv">Export CSV</button>
+        <button class="btn" id="sendTelegram">📨 Send to Telegram</button>
       </div>
     </header>
 
@@ -2596,6 +2597,32 @@ function exportCsv(){
   a.click();
 }
 
+//////////////////// telegram ////////////////////
+async function sendToTelegram(){
+  const btn = $('#sendTelegram');
+  const rows = currentRows();
+  if (!rows.length){ btn.textContent = 'No results'; setTimeout(() => btn.textContent = '📨 Send to Telegram', 1800); return; }
+  const top = rows.slice(0, 30);
+  const lines = top.map(r => `${r.symbol}  $${nf(r.price, 2)}  (${pct(r.chgPct)})`);
+  let text = `Alex screener — ${rows.length} match${rows.length === 1 ? '' : 'es'}\n\n` + lines.join('\n');
+  if (rows.length > top.length) text += `\n… +${rows.length - top.length} more`;
+
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const r = await fetch('/api/telegram/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    btn.textContent = d.ok ? '✓ Sent' : ('✗ ' + (d.error || 'Failed'));
+  } catch(e){
+    btn.textContent = '✗ Request failed';
+  }
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
+}
+
 //////////////////// refresh loop ////////////////////
 let nextTick = 0;
 function scheduleRefresh(){
@@ -2675,6 +2702,7 @@ async function init(){
 
   $('#refreshNow').onclick = () => loadQuotes().then(queueEnrichVisible);
   $('#exportCsv').onclick = exportCsv;
+  $('#sendTelegram').onclick = sendToTelegram;
   $('#interval').onchange = scheduleRefresh;
   $('#drawerClose').onclick = closeDrawer;
   $('#backdrop').onclick = closeDrawer;

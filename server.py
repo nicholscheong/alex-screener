@@ -528,6 +528,108 @@ def start_opend_setup():
 
 
 # ----------------------------------------------------------------------------
+# Telegram bot bridge — push-only, no trading.
+#
+# Lets ALEX send your screener results to a Telegram bot you create yourself
+# (via @BotFather). This never places trades and never will — it only ever
+# calls Telegram's sendMessage API with text you already see on screen.
+#
+# The bot token is a real credential (whoever has it can control the bot), so
+# it's kept in a local JSON file next to server.py, gitignored, and never
+# echoed back in any API response once saved.
+_TG_CONFIG_PATH = os.path.join(ROOT, "telegram.json")
+_tg_lock = threading.Lock()
+
+
+def _tg_load():
+    try:
+        with open(_TG_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _tg_save(data):
+    with open(_TG_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _tg_call(token, method, params=None):
+    qs = ("?" + urllib.parse.urlencode(params)) if params else ""
+    url = "https://api.telegram.org/bot%s/%s%s" % (token, method, qs)
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        # Telegram still sends a JSON body with a real description on 4xx —
+        # urlopen raises before we get to read it, so recover it here instead
+        # of surfacing a bare "HTTP Error 404".
+        try:
+            return json.loads(e.read().decode("utf-8", "replace"))
+        except Exception:
+            return {"ok": False, "description": str(e)}
+
+
+def connect_telegram(token):
+    token = (token or "").strip()
+    if not token:
+        return {"connected": False, "error": "token required"}
+    try:
+        me = _tg_call(token, "getMe")
+        if not me.get("ok"):
+            return {"connected": False, "error": me.get("description") or "invalid token"}
+        username = me["result"].get("username")
+
+        updates = _tg_call(token, "getUpdates", {"limit": 1, "offset": -1})
+        results = updates.get("result") or []
+        if not results:
+            return {"connected": False,
+                    "error": "Send any message to @%s on Telegram first, then click Connect again "
+                             "(that's how Telegram tells ALEX which chat to send to)." % username}
+        chat = (results[-1].get("message") or results[-1].get("channel_post") or {}).get("chat") or {}
+        chat_id = chat.get("id")
+        if not chat_id:
+            return {"connected": False, "error": "could not find a chat id in your most recent message"}
+
+        with _tg_lock:
+            _tg_save({"token": token, "chatId": chat_id, "botUsername": username})
+        _tg_call(token, "sendMessage", {"chat_id": chat_id, "text": "✅ Connected to Alex."})
+        return {"connected": True, "botUsername": username}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+
+
+def telegram_status():
+    cfg = _tg_load()
+    if not cfg.get("token"):
+        return {"connected": False}
+    return {"connected": True, "botUsername": cfg.get("botUsername")}
+
+
+def disconnect_telegram():
+    with _tg_lock:
+        try:
+            os.remove(_TG_CONFIG_PATH)
+        except OSError:
+            pass
+    return {"connected": False}
+
+
+def send_telegram_message(text):
+    cfg = _tg_load()
+    if not cfg.get("token"):
+        return {"ok": False, "error": "Telegram is not connected."}
+    try:
+        r = _tg_call(cfg["token"], "sendMessage", {"chat_id": cfg["chatId"], "text": text})
+        if not r.get("ok"):
+            return {"ok": False, "error": r.get("description") or "send failed"}
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ----------------------------------------------------------------------------
 # HTTP handler
 # ----------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -651,6 +753,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not _is_local_run():
                     return self._send(403, {"error": "local only"})
                 return self._send(200, dict(_opend_setup_state))
+
+            if route == "/api/telegram/status":
+                return self._send(200, telegram_status())
+
+            return self._send(404, {"error": "unknown route"})
+        except BrokenPipeError:
+            pass
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            try:
+                self._send(500, {"error": str(e)})
+            except Exception:
+                pass
+
+    def _json_body(self):
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(length) if length else b""
+        try:
+            return json.loads(raw.decode("utf-8", "replace")) if raw else {}
+        except Exception:
+            return {}
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        route = u.path
+        if not self._authed():
+            return
+        try:
+            if route == "/api/telegram/connect":
+                body = self._json_body()
+                return self._send(200, connect_telegram(body.get("token")))
+
+            if route == "/api/telegram/disconnect":
+                return self._send(200, disconnect_telegram())
+
+            if route == "/api/telegram/send":
+                body = self._json_body()
+                text = (body.get("text") or "").strip()
+                if not text:
+                    return self._send(400, {"error": "text required"})
+                return self._send(200, send_telegram_message(text))
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
