@@ -99,24 +99,47 @@
   .prog>i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s ease}
   .load{padding:56px 20px;text-align:center;color:var(--fg3);font-size:13px}
 
-  /* ---- metric picker dropdown ---- */
-  .ind-wrap{position:relative}
-  #indSearch{width:260px}
-  #indDrop{position:absolute;top:calc(100% + 7px);left:0;width:400px;max-height:440px;overflow-y:auto;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--pop);z-index:60;padding:6px}
+  /* ---- "Add Indicator" modal: category tabs + grid of pickable metrics + selected panel ---- */
+  .btn-accent{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-fg);font-weight:600}
+  .btn-accent:hover{background:color-mix(in srgb,var(--accent) 20%,var(--bg2));color:var(--accent-fg);border-color:var(--accent-line)}
+  #metricModal .mm-card{width:min(880px,94vw);height:min(680px,88vh);display:flex;flex-direction:column;padding:22px 24px;
+                         background:var(--bg2);border:1px solid var(--line-strong);border-radius:var(--r-lg);box-shadow:var(--pop)}
+  .mm-head{display:flex;align-items:center;flex:none;margin-bottom:14px}
+  .mm-head h3{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg)}
+  .mm-head .close{margin-left:auto;position:static;font-size:22px;background:none;border:none;color:var(--fg3);line-height:1}
+  .mm-head .close:hover{color:var(--fg)}
+  .mm-search{flex:none;width:100%;height:38px;background:var(--bg);border:1px solid var(--line);color:var(--fg);
+             border-radius:var(--r);padding:0 13px;font:13.5px var(--font);margin-bottom:14px}
+  .mm-search:focus{border-color:var(--accent-line);outline:none}
+  .mm-tabs{flex:none;display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .mm-tabs button{font-size:12px;font-weight:600;padding:6px 14px;border-radius:var(--r-pill);background:var(--bg3);
+                  border:1px solid var(--line);color:var(--fg2);transition:border-color .12s,color .12s,background .12s}
+  .mm-tabs button:hover{color:var(--fg);border-color:var(--line-strong)}
+  .mm-tabs button.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-fg)}
+  .mm-body{flex:1;display:flex;gap:18px;min-height:0}
+  #indDrop{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:6px;align-content:start;padding-right:4px}
   #indDrop[hidden]{display:none}
-  .ind-quick{display:flex;flex-wrap:wrap;gap:5px;padding:3px 3px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
-  .ind-quick button{font-size:11px;font-weight:500;padding:3px 9px;border-radius:var(--r-pill);background:var(--bg3);border:1px solid var(--line);color:var(--fg2);transition:border-color .12s,color .12s}
-  .ind-quick button:hover{color:var(--fg);border-color:var(--accent-line)}
-  .ind-quick button.star,#indBar .clearAll.star{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-fg);font-weight:600}
-  .ind-quick button.star:hover,#indBar .clearAll.star:hover{background:color-mix(in srgb,var(--accent) 20%,var(--bg2));color:var(--accent-fg)}
-  #indBar .clearAll.star{font-size:11.5px;padding:4px 11px}
-  .ind-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r);cursor:pointer;font-size:12.5px;color:var(--fg)}
-  .ind-item:hover{background:var(--bg3)}
-  .ind-item .box{width:15px;height:15px;border:1px solid var(--fg3);border-radius:var(--r-sm);flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;line-height:1;transition:background .12s,border-color .12s}
-  .ind-item.on .box{background:var(--accent);border-color:var(--accent)}
+  .mm-selected{flex:none;width:200px;display:flex;flex-direction:column;border-left:1px solid var(--line);padding-left:16px;min-height:0}
+  .mm-sel-head{flex:none;font:700 9.5px/1 var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--fg3);margin-bottom:10px}
+  .mm-sel-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+  .mm-sel-empty{color:var(--fg-mute);font-size:11.5px;line-height:1.5}
+  .mm-sel-chip{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px;font-size:11.5px;color:var(--fg2)}
+  .mm-sel-chip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mm-sel-chip button{flex:none;background:none;border:none;color:var(--fg3);font-size:13px;line-height:1}
+  .mm-sel-chip button:hover{color:var(--down)}
+
+  .ind-item{grid-column:span 1;display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--r);cursor:pointer;font-size:12.5px;color:var(--fg);border:1px solid transparent}
+  .ind-param:not(.collapsed){grid-column:1/-1}
+  .ind-item:not(.ind-param):hover{background:var(--bg3);border-color:var(--line)}
+  .ind-item .box{width:22px;height:22px;border:1.5px solid var(--line-strong);border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:transparent;line-height:1;transition:background .12s,border-color .12s,color .12s}
+  .ind-item.on .box{background:var(--accent);border-color:var(--accent);color:#08111f}
+  .ind-item:not(.on):not(.ind-param):hover .box{border-color:var(--accent-line)}
+  .ind-item .box::after{content:"+"}
+  .ind-item.on .box::after{content:"✓"}
   .ind-item .sub{color:var(--fg3);font-size:11px;margin-left:4px}
   .ind-item .gt{margin-left:auto;font:600 8.5px/1.4 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);padding:1px 5px;border-radius:var(--r-sm);flex:none}
-  .ind-empty{padding:16px;text-align:center;color:var(--fg3);font-size:12px}
+  .ind-empty{grid-column:1/-1;padding:30px 16px;text-align:center;color:var(--fg3);font-size:12px}
+  .ind-param .box{display:none}
   .ind-param{flex-wrap:wrap;cursor:default}
   .ind-param.collapsed{cursor:pointer}
   .ind-param:hover{background:var(--bg3)}
@@ -297,10 +320,7 @@
       <div class="mstat"><span class="dot" id="mdot"></span><span id="mtext">Connecting…</span></div>
       <div class="grow"></div>
       <div class="ctl">
-        <span class="ind-wrap">
-          <input type="search" id="indSearch" placeholder="+ Add a metric to screen on (P/E, ATR, RSI, ROE…)" autocomplete="off">
-          <div id="indDrop" hidden></div>
-        </span>
+        <button class="btn btn-accent" id="openMetricModal">+ Add Indicator</button>
         <button class="btn" id="shapeBtn">◧ Pattern Search</button>
         <input type="search" id="search" placeholder="Search ticker / name">
         <label>Refresh
@@ -418,6 +438,24 @@
     <div class="modal-actions">
       <button class="btn" id="comboNameCancel">Cancel</button>
       <button class="btn-primary" id="comboNameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="metricModal" class="modal" hidden>
+  <div class="mm-card">
+    <div class="mm-head">
+      <h3>Add Indicators</h3>
+      <button class="close" id="mmClose">×</button>
+    </div>
+    <input type="search" id="indSearch" class="mm-search" placeholder="Search indicators — P/E, RSI, MACD, ROE, market cap…" autocomplete="off">
+    <div class="mm-tabs" id="mmTabs"></div>
+    <div class="mm-body">
+      <div class="mm-list" id="indDrop"></div>
+      <div class="mm-selected">
+        <div class="mm-sel-head">Selected</div>
+        <div class="mm-sel-list" id="mmSelectedList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1280,6 +1318,7 @@ function afterIndChange(){
   recomputeAllParamTech();
   buildIndBar();
   buildIndDrop($('#indSearch').value.trim());
+  renderMetricSelected();
   queueEnrich();
   queueTF();
   render();
@@ -1429,34 +1468,70 @@ function buildIndBar(){
     bar.appendChild(clr);
   }
 }
+// which category tab is showing inside the Add Indicators modal
+const MM_TABS = [['Common', '★ Common'], ['Market', 'Market / Momentum'], ['Valuation', 'Valuation'],
+                 ['Financials', 'Financials'], ['Technicals', 'Technicals']];
+let mmTab = 'Common';
+function renderMetricTabs(){
+  const wrap = $('#mmTabs');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  MM_TABS.forEach(([key, label]) => {
+    const b = el('button', mmTab === key ? 'on' : '', label);
+    b.onclick = () => { mmTab = key; renderMetricTabs(); buildIndDrop($('#indSearch').value.trim()); };
+    wrap.appendChild(b);
+  });
+}
+// right-hand "Selected" panel inside the modal — every active indicator/condition, each removable
+function renderMetricSelected(){
+  const wrap = $('#mmSelectedList');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const items = [];
+  state.visibleCols.forEach(k => {
+    const col = colByKey(k);
+    if (col) items.push({ label: col.t, remove: () => toggleInd(k) });
+  });
+  state.macdConds.forEach(cond => items.push({
+    label: macdCondLabel(cond),
+    remove: () => { state.macdConds = state.macdConds.filter(c => c.id !== cond.id); afterIndChange(); },
+  }));
+  SIGNALS.filter(s => s[3] === 'macd' && state.sigFilter.includes(s[0])).forEach(s => items.push({
+    label: s[1],
+    remove: () => { state.sigFilter = state.sigFilter.filter(k => k !== s[0]); afterIndChange(); },
+  }));
+  if (!items.length){
+    wrap.appendChild(el('div', 'mm-sel-empty', 'Nothing added yet — click any indicator on the left.'));
+    return;
+  }
+  items.forEach(it => {
+    const chip = el('div', 'mm-sel-chip');
+    chip.appendChild(el('span', null, it.label));
+    const x = el('button', null, '×'); x.title = 'Remove';
+    x.onclick = it.remove;
+    chip.appendChild(x);
+    wrap.appendChild(chip);
+  });
+}
+function openMetricModal(){
+  expandedPickers.clear();
+  $('#metricModal').hidden = false;
+  renderMetricTabs();
+  buildIndDrop($('#indSearch').value.trim());
+  renderMetricSelected();
+  setTimeout(() => $('#indSearch').focus(), 0);
+}
+function closeMetricModal(){ $('#metricModal').hidden = true; }
 function buildIndDrop(query){
   const drop = $('#indDrop');
   drop.innerHTML = '';
-  const quick = el('div', 'ind-quick');
-  const common = el('button', 'star', '★ Common metrics');
-  common.title = 'Add a curated starter set: trend, size, P/E, P/B, yield, ROE, revenue growth, 20-day return, RSI, relative volume, signals';
-  common.onclick = e => { e.stopPropagation(); addIndCols(COMMON_COLS); };
-  quick.appendChild(common);
-  [['Market', 'Market / Momentum'], ['Valuation', 'Valuation'], ['Financials', 'Financials'], ['Technicals', 'Technicals']].forEach(([g, lbl]) => {
-    const b = el('button', null, '+ ' + lbl);
-    b.onclick = e => {
-      e.stopPropagation();
-      let keys = COLS.filter(c => c.g === g).map(c => c.k);
-      if (g === 'Technicals') keys = ['p:rsi:14', 'p:ma:20', 'p:ma:60', 'p:bias:20'].concat(keys);
-      addIndCols(keys);
-    };
-    quick.appendChild(b);
-  });
-  const bc = el('button', null, 'Clear all');
-  bc.onclick = e => { e.stopPropagation(); clearIndCols(); };
-  quick.appendChild(bc);
-  drop.appendChild(quick);
-
-  const pbases = paramBaseMatches(query);
-  const matches = PICKABLE.filter(c => indMatch(c, query));
-  const showMacd = macdQueryMatch(query);
+  const inCommon = mmTab === 'Common';
+  const pool = inCommon ? PICKABLE.filter(c => COMMON_COLS.includes(c.k)) : PICKABLE.filter(c => c.g === mmTab);
+  const matches = pool.filter(c => indMatch(c, query));
+  const pbases = (mmTab === 'Technicals' || inCommon) ? paramBaseMatches(query) : [];
+  const showMacd = mmTab === 'Technicals' && macdQueryMatch(query);
   if (!pbases.length && !matches.length && !showMacd){
-    drop.appendChild(el('div', 'ind-empty', 'No matching metric — try another keyword'));
+    drop.appendChild(el('div', 'ind-empty', 'No matching indicator in this category — try another keyword or tab'));
     return;
   }
   if (showMacd) drop.appendChild(macdBuilderRow());
@@ -1465,7 +1540,7 @@ function buildIndDrop(query){
   matches.forEach(c => {
     const on = state.visibleCols.includes(c.k);
     const item = el('div', 'ind-item' + (on ? ' on' : ''));
-    item.appendChild(el('span', 'box', on ? '✓' : ''));
+    item.appendChild(el('span', 'box'));
     const nm = el('span');
     nm.appendChild(document.createTextNode(c.t));
     const al = aliasesFor(c)[0];
@@ -1654,8 +1729,6 @@ function paramPickRow(base, presetNum){
   }
   return item;
 }
-function openIndDrop(){ buildIndDrop($('#indSearch').value.trim()); $('#indDrop').hidden = false; }
-function closeIndDrop(){ $('#indDrop').hidden = true; }
 
 //////////////////// saved screens (indicator combos) ////////////////////
 // A "combo" is a named snapshot of the same state the ad-hoc screener already
@@ -1730,7 +1803,7 @@ function startNewCombo(){
   $('#saveComboBtn').hidden = false;
   $('#comboBar').hidden = false;
   renderSidebarList();
-  setTimeout(() => { $('#indSearch').focus(); openIndDrop(); }, 0);
+  setTimeout(openMetricModal, 0);
 }
 function openNameModal(){
   $('#comboNameInput').value = '';
@@ -2479,6 +2552,7 @@ async function init(){
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (!$('#nameModal').hidden){ closeNameModal(); return; }
+    if (!$('#metricModal').hidden){ closeMetricModal(); return; }
     if (!$('#chartModal').hidden){ closeChartModal(); return; }
     if (!$('#shapeModal').hidden) return;   // shape modal handles its own Escape
     closeDrawer();
@@ -2488,12 +2562,13 @@ async function init(){
   let st;
   $('#search').addEventListener('input', e => { clearTimeout(st); st = setTimeout(() => { state.search = e.target.value.trim(); render(); }, 200); });
 
-  // indicator search / column picker
+  // indicator search / column picker — lives inside the "Add Indicator" modal
+  $('#openMetricModal').onclick = openMetricModal;
+  $('#mmClose').onclick = closeMetricModal;
   const indS = $('#indSearch');
-  indS.addEventListener('focus', () => { expandedPickers.clear(); openIndDrop(); });
-  indS.addEventListener('input', () => openIndDrop());
+  indS.addEventListener('input', () => buildIndDrop(indS.value.trim()));
   indS.addEventListener('keydown', e => {
-    if (e.key === 'Escape'){ closeIndDrop(); indS.blur(); }
+    if (e.key === 'Escape') closeMetricModal();
     if (e.key === 'Enter'){
       const q = indS.value.trim();
       const pk = typedParamKey(q);            // "rsi 9" -> p:rsi:9
@@ -2502,7 +2577,6 @@ async function init(){
       if (m.length === 1) toggleInd(m[0].k);
     }
   });
-  document.addEventListener('click', e => { if (!e.target.closest('.ind-wrap')) closeIndDrop(); });
   document.addEventListener('click', e => { if (!e.target.closest('.f-wrap')) closeAllFdrops(); });
   buildIndBar();
 
