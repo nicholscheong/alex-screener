@@ -1576,7 +1576,10 @@ const MACD_TFS = { D: 'Daily', W: 'Weekly', M: 'Monthly', '1m': '1 min', '3m': '
                    '15m': '15 min', '30m': '30 min', '60m': '60 min' };
 const PARAM_OPS = { gt: 'Greater Than', lt: 'Less Than', risesAbove: 'Rises Above', fallsBelow: 'Falls Below' };
 const MACD_LINES = { dif: 'DIF', dea: 'DEA', macd: 'MACD' };
-const MACD_C2 = { dif: 'DIF', dea: 'DEA', macd: 'MACD', price: 'Price', value: 'Value' };
+// condition 1 and condition 2 both draw from the same line set (plus Price/Number on the
+// condition-2 side); whichever line is picked on one side is disabled on the other, since
+// comparing a line to itself is meaningless — see the mutual-exclusion sync in macdBuilderRow()
+const MACD_C2 = { price: 'Price', value: 'Number', dif: 'DIF', dea: 'DEA', macd: 'MACD' };
 const MACD_OPS = { gt: 'greater than', lt: 'less than', crossAbove: 'crosses above', crossBelow: 'crosses below' };
 const MACD_KEYMAP = { dif: ['dif', 'prevDif'], dea: ['dea', 'prevDea'], macd: ['hist', 'prevHist'] };
 function macdQueryMatch(q){
@@ -1685,8 +1688,25 @@ function macdBuilderRow(){
   const opSel = mkSel(MACD_OPS, 'crossAbove');
   const c2Sel = mkSel(MACD_C2, 'dea');
   const valInp = el('input', 'pnum macd-val'); valInp.type = 'number'; valInp.step = 'any'; valInp.placeholder = '0';
-  const syncVal = () => { valInp.hidden = c2Sel.value !== 'value'; };
-  c2Sel.onchange = syncVal; syncVal();
+  // condition 1 and condition 2 share the DIF/DEA/MACD line set — comparing a line to itself is
+  // meaningless, so whichever line is picked on one side gets disabled (not just hidden) on the
+  // other; picking a line that the other side already holds bumps that side to the next option
+  const syncExclusion = changed => {
+    if (changed === 'c1' && c1Sel.value === c2Sel.value){
+      const next = Object.keys(MACD_C2).find(k => k !== c1Sel.value);
+      c2Sel.value = next;
+    }
+    if (changed === 'c2' && c2Sel.value === c1Sel.value){
+      const next = Object.keys(MACD_LINES).find(k => k !== c2Sel.value);
+      c1Sel.value = next;
+    }
+    Array.from(c1Sel.options).forEach(o => { o.disabled = (o.value === c2Sel.value); });
+    Array.from(c2Sel.options).forEach(o => { o.disabled = (o.value in MACD_LINES) && (o.value === c1Sel.value); });
+    valInp.hidden = c2Sel.value !== 'value';
+  };
+  c1Sel.onchange = () => syncExclusion('c1');
+  c2Sel.onchange = () => syncExclusion('c2');
+  syncExclusion();
   row2.appendChild(c1Sel); row2.appendChild(opSel); row2.appendChild(c2Sel); row2.appendChild(valInp);
   form.appendChild(row2);
 
