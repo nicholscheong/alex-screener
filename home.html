@@ -39,8 +39,6 @@
              padding:8px 14px;text-decoration:none;color:inherit;font-size:12px;cursor:pointer;white-space:nowrap;
              transition:border-color .12s,background .12s}
   a.mini-card:hover,.mini-card:hover{border-color:var(--accent-line);background:var(--bg3)}
-  .mini-card.busy{cursor:default}
-  .mini-card.busy:hover{border-color:var(--line);background:var(--bg2)}
   .mini-card .ic{font-size:14px;line-height:1}
   .mini-card .label{font-weight:600;color:var(--fg)}
   .mini-card .state{color:var(--fg3);font-size:11px}
@@ -125,11 +123,11 @@
   <a class="logout" href="#" id="logoutLink" hidden>Log out</a>
 </header>
 <div class="mini-row">
-  <div class="mini-card" id="connectCard" tabindex="0" role="button" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
+  <a class="mini-card" href="/moomoo" title="One click to install &amp; launch moomoo's OpenD gateway locally, so Portfolio can read your real positions. You still log in yourself — nothing here touches your password.">
     <span class="ic">🔌</span>
-    <span class="label" id="connectLabel">Connect moomoo</span>
+    <span class="label">Connect moomoo</span>
     <span class="state" id="connectState"></span>
-  </div>
+  </a>
   <a class="mini-card" href="/telegram" title="Push your screener results to a Telegram bot you create. Read-only, no trading.">
     <span class="ic">📨</span>
     <span class="label">Connect Telegram</span>
@@ -299,70 +297,12 @@ fetch('/api/telegram/status').then(function(r){ return r.json(); }).then(functio
   el.textContent = '✓ Connected';
 }).catch(function(){});
 
-(function(){
-  var card = document.getElementById('connectCard');
-  if (!card) return;
-  var label = document.getElementById('connectLabel');
-  var stateEl = document.getElementById('connectState');
-  var polling = false;
-  var done = false;
-
-  function render(state){
-    if (!state.status && state.error){
-      state = { status: 'error', detail: state.error === 'local only'
-        ? 'Only works on your local Alex — open it via Start Alex, not the cloud site.'
-        : state.error };
-    }
-    stateEl.classList.remove('ok', 'err');
-    if (state.status === 'done'){
-      done = true;
-      card.classList.remove('busy');
-      label.textContent = 'moomoo';
-      stateEl.classList.add('ok');
-      stateEl.textContent = '✓ Connected';
-      card.title = 'Connected — click to open Portfolio.';
-      return;
-    }
-    if (state.status === 'error'){
-      card.classList.remove('busy');
-      stateEl.classList.add('err');
-      stateEl.textContent = '✗ Retry';
-      card.title = 'Could not connect: ' + state.detail + ' — click to retry.';
-      return;
-    }
-    card.classList.add('busy');
-    stateEl.textContent = (state.pct ? state.pct + '% ' : '') + (state.detail || 'Working...');
-  }
-
-  function poll(){
-    if (polling) return;
-    polling = true;
-    fetch('/api/opend/status').then(function(r){ return r.json(); }).then(function(state){
-      render(state);
-      polling = false;
-      if (state.status === 'downloading' || state.status === 'extracting' || state.status === 'launching'){
-        setTimeout(poll, 1000);
-      }
-    }).catch(function(){ polling = false; });
-  }
-
-  card.addEventListener('click', function(){
-    if (done){ window.location.href = '/portfolio'; return; }
-    if (card.classList.contains('busy')) return;
-    fetch('/api/opend/setup').then(function(r){ return r.json(); }).then(function(state){
-      render(state);
-      setTimeout(poll, 1000);
-    }).catch(function(e){
-      render({ status: 'error', detail: 'request failed: ' + e.message });
-    });
-  });
-  card.addEventListener('keydown', function(e){
-    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); card.click(); }
-  });
-  fetch('/api/opend/probe').then(function(r){ return r.json(); }).then(function(p){
-    if (p.connected) render({ status: 'done' });
-  }).catch(function(){});
-})();
+fetch('/api/opend/probe').then(function(r){ return r.json(); }).then(function(p){
+  if (!p.connected) return;
+  var el = document.getElementById('connectState');
+  el.classList.add('ok');
+  el.textContent = '✓ Connected';
+}).catch(function(){});
 </script>
 </body>
 </html>

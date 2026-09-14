@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25;
+    --line:#1f2531; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d;
+    --accent:#5b93f6; --accent-fg:#d7e6ff; --accent-bg:#16233c; --accent-line:#31496f;
+    --r-sm:4px; --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;min-height:100%}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  .logo small{font:600 9.5px/1 var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);margin-left:2px}
+  .grow{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;text-decoration:none}
+  .btn:hover{color:var(--fg);border-color:var(--line-strong);background:var(--bg2)}
+  .btn-primary{height:40px;padding:0 20px;background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+
+  main{flex:1;padding:32px 24px;max-width:640px;width:100%;margin:0 auto}
+  h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em}
+  .sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5}
+  .badge-local{display:inline-flex;align-items:center;gap:5px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 9px;margin-left:8px;vertical-align:2px}
+
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;margin-bottom:20px}
+  .panel h2{margin:0 0 14px;font-size:14px}
+  .steps{margin:0 0 22px;padding-left:0;list-style:none;counter-reset:step}
+  .steps li{counter-increment:step;position:relative;padding-left:34px;margin-bottom:14px;color:var(--fg2);line-height:1.6}
+  .steps li::before{content:counter(step);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:var(--bg3);border:1px solid var(--line-strong);color:var(--fg);font:600 11px/22px var(--font);text-align:center}
+  .steps a{color:var(--accent-fg)}
+  .steps code{background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 6px;font:12px var(--mono);color:var(--accent-fg)}
+
+  .progress-wrap{margin-top:4px}
+  .bar{height:6px;background:var(--bg3);border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:10px}
+  .bar i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s ease}
+  .status-line{color:var(--fg2);font-size:12.5px}
+
+  .err{background:rgba(240,95,107,.14);border:1px solid rgba(240,95,107,.3);color:#f0a0a8;
+       border-radius:var(--r);padding:10px 12px;font-size:12px;margin-top:14px;white-space:pre-wrap;word-break:break-word}
+
+  .connected-box{display:flex;align-items:center;gap:12px}
+  .dot-ok{width:8px;height:8px;border-radius:50%;background:#3ecf8e;box-shadow:0 0 8px #3ecf8e;flex:none}
+  .connected-box .msg{font-weight:600;font-size:14px}
+
+  .manual{color:var(--fg3);font-size:12px;line-height:1.7}
+  .manual a{color:var(--accent-fg)}
+  .manual summary{cursor:pointer;color:var(--fg2);font-size:12.5px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/"><span>Alex</span><small>Home</small></a>
+  <div class="grow"></div>
+  <a class="btn" href="/portfolio">Portfolio</a>
+  <a class="btn" href="/screener">Stock Screener</a>
+</header>
+<main>
+  <h1>Connect moomoo Dashboard<span class="badge-local">Local only</span></h1>
+  <p class="sub">One click installs &amp; launches moomoo's official OpenD gateway on your own computer, so Portfolio and Assets can read your real positions. This never places trades and never sees your password.</p>
+
+  <div class="panel" id="panel">
+    <div class="status-line">Checking…</div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const panel = document.getElementById('panel');
+function el(t, c, txt){ const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; }
+
+function renderSteps(){
+  panel.innerHTML = '';
+  panel.appendChild(el('h2', null, 'Set up in three steps'));
+  const steps = el('ol', 'steps');
+  const s1 = el('li'); s1.textContent = 'Click Connect below — Alex downloads (first time only) and launches moomoo’s OpenD gateway on this computer.';
+  const s2 = el('li'); s2.textContent = 'A window opens — log in there with your real moomoo account. We never see or touch your password.';
+  const s3 = el('li'); s3.textContent = 'Once connected, open Portfolio or Assets to see your real data.';
+  steps.append(s1, s2, s3);
+  panel.appendChild(steps);
+
+  const btn = el('button', 'btn-primary', 'Connect');
+  panel.appendChild(btn);
+
+  const progress = el('div', 'progress-wrap');
+  progress.hidden = true;
+  const bar = el('div', 'bar');
+  const fill = el('i');
+  bar.appendChild(fill);
+  const statusLine = el('div', 'status-line');
+  progress.append(bar, statusLine);
+  panel.appendChild(progress);
+
+  const errBox = el('div', 'err');
+  errBox.hidden = true;
+  panel.appendChild(errBox);
+
+  let polling = false;
+  function renderState(state){
+    if (state.status === 'done'){
+      renderConnected();
+      return;
+    }
+    if (state.status === 'error'){
+      btn.hidden = false; btn.disabled = false; btn.textContent = 'Retry';
+      progress.hidden = true;
+      errBox.hidden = false;
+      errBox.textContent = 'Could not connect: ' + state.detail;
+      return;
+    }
+    btn.hidden = true;
+    errBox.hidden = true;
+    progress.hidden = false;
+    fill.style.width = Math.max(4, state.pct || 0) + '%';
+    statusLine.textContent = (state.pct ? state.pct + '% — ' : '') + (state.detail || 'Working...');
+  }
+  function poll(){
+    if (polling) return;
+    polling = true;
+    fetch('/api/opend/status').then(r => r.json()).then(state => {
+      renderState(state);
+      polling = false;
+      if (['downloading', 'extracting', 'launching'].includes(state.status)) setTimeout(poll, 1000);
+    }).catch(() => { polling = false; });
+  }
+  btn.addEventListener('click', () => {
+    btn.disabled = true;
+    fetch('/api/opend/setup').then(r => r.json()).then(state => {
+      renderState(state);
+      setTimeout(poll, 1000);
+    }).catch(e => {
+      renderState({ status: 'error', detail: 'request failed: ' + e.message });
+    });
+  });
+
+  appendManualFallback(panel);
+}
+
+function appendManualFallback(container){
+  const details = el('details', 'manual');
+  const summary = el('summary', null, "One-click not working? Set it up manually");
+  details.appendChild(summary);
+  const box = el('div');
+  box.style.marginTop = '10px';
+  box.innerHTML = '1. Install the SDK on this machine: <code>pip install futu-api</code><br><br>' +
+    '2. Download moomoo’s official OpenD gateway from <a href="https://www.moomoo.com/download/OpenAPI" target="_blank" rel="noopener">moomoo’s OpenAPI page</a> and sign in to your account inside it<br><br>' +
+    '3. Leave OpenD running (default port 11111), then reload this page';
+  details.appendChild(box);
+  container.appendChild(details);
+}
+
+function renderConnected(){
+  panel.innerHTML = '';
+  panel.appendChild(el('h2', null, 'Connected'));
+  const box = el('div', 'connected-box');
+  box.appendChild(el('span', 'dot-ok'));
+  box.appendChild(el('span', 'msg', 'moomoo OpenD is connected.'));
+  panel.appendChild(box);
+  const links = el('div');
+  links.style.marginTop = '16px';
+  links.style.display = 'flex';
+  links.style.gap = '10px';
+  const a1 = el('a', 'btn', 'Open Portfolio'); a1.href = '/portfolio';
+  const a2 = el('a', 'btn', 'Open Assets'); a2.href = '/assets';
+  links.append(a1, a2);
+  panel.appendChild(links);
+}
+
+fetch('/api/opend/probe').then(r => r.json()).then(p => {
+  if (p.connected) renderConnected();
+  else renderSteps();
+}).catch(() => renderSteps());
+</script>
+</body>
+</html>

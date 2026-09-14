@@ -592,8 +592,16 @@ def _run_opend_setup():
         _opend_setup_state = {"status": "launching",
                                "detail": "Opening moomoo OpenD — log in with your moomoo account in its window.",
                                "pct": 96}
-        import subprocess
-        subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        # OpenD's GUI requires administrator rights to run -- plain Popen fails
+        # with WinError 740 (elevation required). os.startfile(..., "runas")
+        # triggers the normal Windows UAC consent prompt instead, same as
+        # right-click > "Run as administrator". The user still has to click
+        # Yes there themselves; nothing here bypasses that consent.
+        try:
+            os.startfile(exe, "runas")
+        except Exception:
+            import subprocess
+            subprocess.Popen([exe], cwd=os.path.dirname(exe))
         for _ in range(20):
             time.sleep(1)
             if _opend_port_open():
@@ -874,6 +882,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("assets.html", "text/html; charset=utf-8")
             if route in ("/telegram", "/telegram.html"):
                 return self._file("telegram.html", "text/html; charset=utf-8")
+            if route in ("/moomoo", "/moomoo.html"):
+                return self._file("moomoo.html", "text/html; charset=utf-8")
             if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
