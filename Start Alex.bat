@@ -3,6 +3,12 @@ chcp 65001 >nul
 title Alex Dashboard
 cd /d "%~dp0"
 
+if not exist "%USERPROFILE%\Desktop\Start Alex.lnk" (
+  echo   Creating a desktop shortcut for next time...
+  powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%USERPROFILE%\Desktop\Start Alex.lnk'); $s.TargetPath='%~f0'; $s.WorkingDirectory='%~dp0'; if (Test-Path '%~dp0favicon.ico') { $s.IconLocation='%~dp0favicon.ico' }; $s.Save()" >nul 2>nul
+  echo.
+)
+
 echo.
 echo   Starting the Alex dashboard ...
 echo   Your browser will open http://127.0.0.1:8787
