@@ -184,7 +184,34 @@ function renderConnected(){
   panel.appendChild(links);
 }
 
-fetch('/api/opend/probe').then(r => r.json()).then(p => {
+function renderSelfHostGuide(){
+  panel.innerHTML = '';
+  panel.appendChild(el('h2', null, 'Run Alex on your own computer to connect moomoo'));
+  const p = el('p');
+  p.style.color = 'var(--fg2)';
+  p.style.margin = '0 0 18px';
+  p.style.lineHeight = '1.6';
+  p.textContent = "moomoo's OpenD gateway can't be reached from this website — it only runs on your own machine. Get your own copy of Alex running (about five minutes, one time):";
+  panel.appendChild(p);
+
+  const steps = el('ol', 'steps');
+  const s1 = el('li');
+  s1.innerHTML = 'Install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3</a> if you don’t already have it.';
+  const s2 = el('li');
+  s2.innerHTML = 'Download the Alex source from <a href="https://github.com/nicholscheong/alex-screener" target="_blank" rel="noopener">GitHub</a> (green "Code" button → Download ZIP), then unzip it.';
+  const s3 = el('li');
+  s3.innerHTML = 'Windows: double-click <code>Start Alex.bat</code> in that folder.<br>Mac/Linux: open a terminal there and run <code>python3 server.py</code>.';
+  const s4 = el('li');
+  s4.textContent = 'Your own local Alex opens in your browser. Go to its moomoo page and click Connect — that’s the one-click setup, now running on your own computer with your own moomoo login.';
+  steps.append(s1, s2, s3, s4);
+  panel.appendChild(steps);
+}
+
+fetch('/api/opend/probe').then(r => {
+  if (r.status === 403) { renderSelfHostGuide(); return null; }
+  return r.json();
+}).then(p => {
+  if (!p) return;
   if (p.connected) renderConnected();
   else renderSteps();
 }).catch(() => renderSteps());
