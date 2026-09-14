@@ -541,6 +541,21 @@ def _opend_port_open():
         return False
 
 
+def _opend_gui_running():
+    """Is a moomoo_OpenD-GUI*.exe process already running? Used to avoid
+    launching a second instance on top of one still sitting at its login
+    screen -- two instances fight over the port and neither ever binds it."""
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq moomoo_OpenD-GUI*"],
+            capture_output=True, text=True, timeout=10
+        ).stdout
+        return "moomoo_OpenD-GUI" in out
+    except Exception:
+        return False
+
+
 def _run_opend_setup():
     global _opend_setup_state
     try:
@@ -589,26 +604,44 @@ def _run_opend_setup():
             if not exe:
                 raise RuntimeError("extracted the archive but couldn't find moomoo_OpenD-GUI*.exe inside it")
 
-        _opend_setup_state = {"status": "launching",
-                               "detail": "Opening moomoo OpenD — log in with your moomoo account in its window.",
-                               "pct": 96}
-        # OpenD's GUI requires administrator rights to run -- plain Popen fails
-        # with WinError 740 (elevation required). os.startfile(..., "runas")
-        # triggers the normal Windows UAC consent prompt instead, same as
-        # right-click > "Run as administrator". The user still has to click
-        # Yes there themselves; nothing here bypasses that consent.
-        try:
-            os.startfile(exe, "runas")
-        except Exception:
-            import subprocess
-            subprocess.Popen([exe], cwd=os.path.dirname(exe))
-        for _ in range(20):
+        # If OpenD is already open (e.g. sitting at its login screen from a
+        # previous click), launching again spawns a second instance that
+        # fights the first one for the port -- neither ever binds it, and the
+        # user is left with two stuck windows and no way in. So: only launch
+        # if nothing's running yet: otherwise just tell them to finish
+        # logging into the window that's already open.
+        if _opend_gui_running():
+            _opend_setup_state = {"status": "launching",
+                                   "detail": "moomoo OpenD is already open — finish logging in in its window.",
+                                   "pct": 96}
+        else:
+            _opend_setup_state = {"status": "launching",
+                                   "detail": "Opening moomoo OpenD — log in with your moomoo account in its window.",
+                                   "pct": 96}
+            # OpenD's GUI requires administrator rights to run -- plain Popen
+            # fails with WinError 740 (elevation required). os.startfile(...,
+            # "runas") triggers the normal Windows UAC consent prompt instead,
+            # same as right-click > "Run as administrator". The user still has
+            # to click Yes there themselves; nothing here bypasses that consent.
+            try:
+                os.startfile(exe, "runas")
+            except Exception:
+                import subprocess
+                subprocess.Popen([exe], cwd=os.path.dirname(exe))
+
+        # Give them real time to type credentials + any 2FA rather than
+        # falsely reporting "done" the moment a short wait elapses.
+        for _ in range(180):
             time.sleep(1)
             if _opend_port_open():
-                break
-        _opend_setup_state = {"status": "done",
-                               "detail": "OpenD is open. Log in with your moomoo account in its window, then open Portfolio.",
-                               "pct": 100}
+                _opend_setup_state = {"status": "done",
+                                       "detail": "OpenD is open and connected. Open Portfolio to see your data.",
+                                       "pct": 100}
+                return
+        _opend_setup_state = {"status": "error",
+                               "detail": "Still waiting for you to finish logging into the OpenD window — "
+                                         "once you have, click Connect again.",
+                               "pct": 0}
     except Exception as e:
         _opend_setup_state = {"status": "error", "detail": str(e), "pct": 0}
 
