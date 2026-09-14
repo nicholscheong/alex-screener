@@ -110,6 +110,11 @@ function renderSteps(){
 
   let polling = false;
   function renderState(state){
+    if (!state.status && state.error){
+      state = { status: 'error', detail: state.error === 'local only'
+        ? 'Only works on your local Alex — open it via Start Alex, not the cloud site.'
+        : state.error };
+    }
     if (state.status === 'done'){
       renderConnected();
       return;
