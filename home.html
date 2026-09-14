@@ -133,6 +133,7 @@
   <a class="mini-card" href="/telegram" title="Push your screener results to a Telegram bot you create. Read-only, no trading.">
     <span class="ic">📨</span>
     <span class="label">Connect Telegram</span>
+    <span class="state" id="tgState"></span>
   </a>
 </div>
 <main>
@@ -289,6 +290,13 @@ fetch('/api/whoami').then(function(r){ return r.json(); }).then(function(d){
   document.getElementById('whoami').hidden = false;
   document.getElementById('whoami').textContent = d.user;
   document.getElementById('logoutLink').hidden = false;
+}).catch(function(){});
+
+fetch('/api/telegram/status').then(function(r){ return r.json(); }).then(function(d){
+  if (!d.connected) return;
+  var el = document.getElementById('tgState');
+  el.classList.add('ok');
+  el.textContent = '✓ Connected';
 }).catch(function(){});
 
 (function(){
