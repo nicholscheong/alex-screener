@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25;
+    --line:#1f2531; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d;
+    --accent:#5b93f6; --accent-fg:#d7e6ff;
+    --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);font:14px/1.7 var(--font);-webkit-font-smoothing:antialiased}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  main{max-width:680px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:22px;margin:0 0 6px}
+  .updated{color:var(--fg3);font-size:12.5px;margin:0 0 32px}
+  h2{font-size:15px;margin:32px 0 10px;color:var(--fg)}
+  p,li{color:var(--fg2)}
+  ul{padding-left:20px}
+  a{color:var(--accent-fg)}
+  code{background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:13px}
+</style>
+</head>
+<body>
+<header><a class="logo" href="/"><span>Alex</span></a></header>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: September 2026</p>
+
+  <p>Alex is a personal stock-screening and portfolio dashboard. This page explains what data it collects when you sign in and use it.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><strong>Google Sign-In:</strong> if you sign in with Google, we receive your email address, name, and profile picture from Google — used only to identify your session. We don't request access to your Gmail, Drive, contacts, or anything beyond basic profile info.</li>
+    <li><strong>Telegram bot connection (optional):</strong> if you connect a Telegram bot, we store the bot token and chat ID you provide, scoped to your account. This is only ever used to send you the screener results you ask to be sent — never anything else, and never to any other chat.</li>
+    <li><strong>Market data:</strong> stock screener results are pulled from public Yahoo Finance data and shown to you directly. We don't log your searches or filters.</li>
+  </ul>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>We don't sell or share your data with third parties.</li>
+    <li>We don't use your data for advertising.</li>
+    <li>We never place trades or move money — nothing in Alex has that capability.</li>
+  </ul>
+
+  <h2>Data storage</h2>
+  <p>Account and Telegram-connection data is stored on the server that runs Alex. You can disconnect your Telegram bot at any time from the Telegram page, which deletes the stored token immediately.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:bug666007666@gmail.com">bug666007666@gmail.com</a></p>
+</main>
+</body>
+</html>

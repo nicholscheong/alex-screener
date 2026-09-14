@@ -793,12 +793,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(u.query)
         route = u.path
         _public = ("/api/health", "/login", "/login.html", "/favicon.ico",
-                   "/api/auth/google/start", "/api/auth/google/callback")
+                   "/api/auth/google/start", "/api/auth/google/callback",
+                   "/privacy", "/privacy.html")
         if route not in _public and not self._authed():
             return
         try:
             if route in ("/login", "/login.html"):
                 return self._file("login.html", "text/html; charset=utf-8")
+
+            if route in ("/privacy", "/privacy.html"):
+                return self._file("privacy.html", "text/html; charset=utf-8")
 
             if route == "/api/auth/google/start":
                 if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
