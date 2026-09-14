@@ -629,7 +629,15 @@ def start_opend_setup():
 # {user_id: {token, chatId, botUsername}}, so different people's bots stay
 # separate. "local" is the key used when no login is configured at all
 # (single-machine local runs, matching the previous single-user behavior).
-_TG_STORE_PATH = os.path.join(ROOT, "telegram.json")
+#
+# On Fly, the container's own disk is wiped on every redeploy -- if a Fly
+# Volume is mounted, the store lives there instead so Telegram connections
+# survive deploys. Auto-detected at /data (fly.toml's mount destination) so
+# nothing extra needs configuring beyond attaching the volume; ALEX_DATA_DIR
+# overrides that path if you mount it somewhere else. Locally there's no
+# volume, so it just falls back to sitting next to server.py, same as before.
+_DATA_DIR = os.environ.get("ALEX_DATA_DIR", "").strip() or ("/data" if os.path.isdir("/data") else ROOT)
+_TG_STORE_PATH = os.path.join(_DATA_DIR, "telegram.json")
 _tg_lock = threading.Lock()
 
 
