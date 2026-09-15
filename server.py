@@ -917,8 +917,19 @@ def _gmail_access_token(user_id):
 
 def _gmail_api_get(access_token, url):
     req = urllib.request.Request(url, headers={"Authorization": "Bearer " + access_token, "User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        # Surface Google's actual error body (e.g. "Gmail API has not been
+        # used in project ... before or it is disabled") instead of a bare
+        # "HTTP Error 403: Forbidden", which is useless for debugging.
+        try:
+            body = json.loads(e.read().decode("utf-8", "replace"))
+            msg = (body.get("error") or {}).get("message") or str(e)
+        except Exception:
+            msg = str(e)
+        raise RuntimeError(msg)
 
 
 def gmail_status(user_id):
