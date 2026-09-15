@@ -182,12 +182,34 @@ function renderBalances(balances){
   const box = el('div', 'balances');
   balances.forEach(b => {
     const row = el('div', 'bal-row');
+    row.style.flexWrap = 'wrap';
     const left = el('div');
     left.appendChild(el('div', 'bal-label', b.label || b.query));
     left.appendChild(el('div', 'bal-sub', b.error ? b.error : ('From: ' + (b.subject || ''))));
     row.appendChild(left);
-    if (b.balance) row.appendChild(el('div', 'bal-value', 'RM ' + b.balance));
-    else row.appendChild(el('div', 'bal-value na', 'Not found'));
+    if (b.balance){
+      row.appendChild(el('div', 'bal-value', 'RM ' + b.balance));
+    } else if ((b.candidates || []).length){
+      const picks = el('div');
+      picks.style.display = 'flex';
+      picks.style.flexWrap = 'wrap';
+      picks.style.gap = '6px';
+      b.candidates.forEach(val => {
+        const chip = el('button', 'btn', 'RM ' + val);
+        chip.style.fontFamily = 'var(--mono)';
+        chip.addEventListener('click', () => {
+          chip.disabled = true;
+          fetch('/api/gmail/confirm', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: b.query, balance: val })
+          }).then(() => load());
+        });
+        picks.appendChild(chip);
+      });
+      row.appendChild(picks);
+    } else {
+      row.appendChild(el('div', 'bal-value na', 'Not found'));
+    }
     box.appendChild(row);
   });
   wrap.appendChild(box);

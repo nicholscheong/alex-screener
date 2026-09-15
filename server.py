@@ -69,7 +69,11 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 
 def _login_required():
-    return bool((USERNAME and PASSWORD) or (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET))
+    # Single-owner only now -- public "anyone with a Google account" sign-in
+    # was removed, so GOOGLE_CLIENT_ID/SECRET (still used for the separate,
+    # already-logged-in-only Gmail-connect feature) no longer implies a login
+    # requirement on their own.
+    return bool(USERNAME and PASSWORD)
 
 
 # Session cookies are HMAC-signed rather than stored server-side, so any
@@ -104,36 +108,11 @@ def _verify_session_cookie(value):
 
 
 # ----------------------------------------------------------------------------
-# "Sign in with Google" -- any Google account may sign in; there's no
-# allowlist. Requires a Google Cloud OAuth 2.0 Client (Web application) set up
-# by hand at https://console.cloud.google.com/apis/credentials, with this
-# app's /api/auth/google/callback URL added as an authorized redirect URI.
+# Google helper shared by the Gmail-connect feature (see gmail bridge below).
+# There's no general "Sign in with Google" anymore -- this app is
+# single-owner only; only the Gmail read-only OAuth grant (a separate,
+# already-logged-in-only flow) still needs Google's API.
 # ----------------------------------------------------------------------------
-def _google_auth_url(redirect_uri, state):
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-        "prompt": "select_account",
-    }
-    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-
-
-def _google_exchange_code(code, redirect_uri):
-    data = urllib.parse.urlencode({
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": redirect_uri,
-        "grant_type": "authorization_code",
-    }).encode("utf-8")
-    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
-
-
 def _google_userinfo(access_token):
     req = urllib.request.Request("https://www.googleapis.com/oauth2/v3/userinfo",
                                   headers={"Authorization": "Bearer " + access_token, "User-Agent": UA})
@@ -959,9 +938,46 @@ def gmail_set_keywords(user_id, keywords):
     return {"ok": True}
 
 
+def gmail_confirm_balance(user_id, query, balance):
+    """Lets the user manually pick the right figure out of the candidates
+    list when the automatic extraction wasn't confident enough to pick one."""
+    with _gmail_lock:
+        all_data = _gmail_load_all()
+        entry = all_data.get(user_id)
+        if not entry:
+            return {"ok": False, "error": "Gmail is not connected."}
+        for b in entry.get("balances") or []:
+            if b.get("query") == query:
+                b["balance"] = balance
+                b["candidates"] = []
+                b["error"] = None
+        _gmail_save_all(all_data)
+    return {"ok": True}
+
+
 def _extract_balance_from_text(text):
     m = _BALANCE_RE.search(text)
     return m.group(1).replace(",", "") if m else None
+
+
+# Fallback when no labeled "ending balance"-type phrase matches: just grab
+# every money-shaped number in the text, deduplicated, in order of
+# appearance. Deliberately permissive -- the exact right figure isn't always
+# next to a recognizable label, so surface candidates for a human to glance
+# at rather than silently reporting nothing.
+_AMOUNT_RE = re.compile(r"(?:RM|MYR|\$)?\s?([\d]{1,3}(?:,\d{3})*\.\d{2})\b")
+
+
+def _extract_amount_candidates(text, limit=6):
+    seen, out = set(), []
+    for m in _AMOUNT_RE.finditer(text):
+        val = m.group(1)
+        if val not in seen:
+            seen.add(val)
+            out.append(val)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _pdf_text(raw_bytes):
@@ -1008,7 +1024,13 @@ def gmail_fetch(user_id):
                 "https://www.googleapis.com/gmail/v1/users/me/messages?" +
                 urllib.parse.urlencode({"q": query, "maxResults": 5}))
             msg_ids = [m["id"] for m in (search.get("messages") or [])]
-            found_balance, found_subject = None, None
+            if not msg_ids:
+                results.append({"label": label, "query": query, "balance": None, "candidates": [],
+                                 "subject": None, "checkedAt": int(time.time()),
+                                 "error": "No emails matched this search."})
+                continue
+
+            found_balance, found_subject, candidates = None, None, []
             for mid in msg_ids:
                 msg = _gmail_api_get(access_token,
                     "https://www.googleapis.com/gmail/v1/users/me/messages/%s?format=full" % mid)
@@ -1016,7 +1038,11 @@ def gmail_fetch(user_id):
                 for h in (msg.get("payload", {}).get("headers") or []):
                     if h.get("name") == "Subject":
                         subject = h.get("value", "")
-                balance = None
+                # gather this message's full readable text (PDF attachments +
+                # any text/plain or text/html parts) before deciding anything,
+                # so the broad fallback below sees everything, not just
+                # whichever part happened to come first.
+                combined_text = []
                 for part in _walk_gmail_parts(msg.get("payload")):
                     mime = part.get("mimeType", "")
                     body = part.get("body", {})
@@ -1025,22 +1051,28 @@ def gmail_fetch(user_id):
                             "https://www.googleapis.com/gmail/v1/users/me/messages/%s/attachments/%s"
                             % (mid, body["attachmentId"]))
                         if att.get("data"):
-                            balance = _extract_balance_from_text(_pdf_text(_b64url_decode(att["data"])))
-                    elif mime.startswith("text/") and body.get("data") and not balance:
-                        text = _b64url_decode(body["data"]).decode("utf-8", "replace")
-                        balance = _extract_balance_from_text(text)
-                    if balance:
-                        break
+                            combined_text.append(_pdf_text(_b64url_decode(att["data"])))
+                    elif mime.startswith("text/") and body.get("data"):
+                        combined_text.append(_b64url_decode(body["data"]).decode("utf-8", "replace"))
+                text = "\n".join(combined_text)
+                balance = _extract_balance_from_text(text)
                 if balance:
                     found_balance, found_subject = balance, subject
                     break
+                if not candidates:
+                    msg_candidates = _extract_amount_candidates(text)
+                    if msg_candidates:
+                        candidates, found_subject = msg_candidates, subject
+
             results.append({
-                "label": label, "query": query, "balance": found_balance, "subject": found_subject,
-                "checkedAt": int(time.time()),
-                "error": None if found_balance else "No balance found in recent matching emails.",
+                "label": label, "query": query, "balance": found_balance,
+                "candidates": [] if found_balance else candidates,
+                "subject": found_subject, "checkedAt": int(time.time()),
+                "error": None if (found_balance or candidates) else
+                         "Found matching emails, but no dollar amounts in them.",
             })
         except Exception as e:
-            results.append({"label": label, "query": query, "balance": None,
+            results.append({"label": label, "query": query, "balance": None, "candidates": [],
                              "error": str(e), "checkedAt": int(time.time())})
 
     with _gmail_lock:
@@ -1121,7 +1153,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         q = urllib.parse.parse_qs(u.query)
         route = u.path
         _public = ("/api/health", "/login", "/login.html", "/favicon.ico",
-                   "/api/auth/google/start", "/api/auth/google/callback",
                    "/privacy", "/privacy.html")
         if route not in _public and not self._authed():
             return
@@ -1131,61 +1162,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if route in ("/privacy", "/privacy.html"):
                 return self._file("privacy.html", "text/html; charset=utf-8")
-
-            if route == "/api/auth/google/start":
-                if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
-                    self.send_response(302)
-                    self.send_header("Location", "/login?error=" + urllib.parse.quote("Google sign-in isn't configured."))
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
-                    return
-                state = secrets.token_urlsafe(24)
-                next_path = (q.get("next") or ["/"])[0]
-                redirect_uri = self._base_url() + "/api/auth/google/callback"
-                self.send_response(302)
-                self.send_header("Location", _google_auth_url(redirect_uri, state))
-                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
-                self.send_header("Set-Cookie", "alex_oauth_state=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=600%s" % (state, secure))
-                self.send_header("Set-Cookie", "alex_oauth_next=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=600%s" % (urllib.parse.quote(next_path, safe=""), secure))
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
-
-            if route == "/api/auth/google/callback":
-                def _fail(msg):
-                    self.send_response(302)
-                    self.send_header("Location", "/login?error=" + urllib.parse.quote(msg))
-                    self.send_header("Content-Length", "0")
-                    self.end_headers()
-                code = (q.get("code") or [""])[0]
-                state = (q.get("state") or [""])[0]
-                expected_state = self._get_cookie("alex_oauth_state")
-                if not code or not state or not expected_state or not hmac.compare_digest(state, expected_state):
-                    return _fail("Google sign-in failed (state mismatch) — please try again.")
-                try:
-                    redirect_uri = self._base_url() + "/api/auth/google/callback"
-                    tokens = _google_exchange_code(code, redirect_uri)
-                    access_token = tokens.get("access_token")
-                    if not access_token:
-                        return _fail(tokens.get("error_description") or "Google sign-in failed.")
-                    info = _google_userinfo(access_token)
-                    email = info.get("email")
-                    if not email or not info.get("email_verified"):
-                        return _fail("Your Google account has no verified email.")
-                except Exception as e:
-                    return _fail("Google sign-in failed: %s" % e)
-                next_path = urllib.parse.unquote(self._get_cookie("alex_oauth_next") or "/")
-                if not next_path.startswith("/"):
-                    next_path = "/"
-                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
-                self.send_response(302)
-                self.send_header("Location", next_path)
-                self.send_header("Set-Cookie", "alex_session=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=%d%s"
-                                                % (_make_session_cookie(email), _SESSION_MAX_AGE, secure))
-                self.send_header("Set-Cookie", "alex_oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0%s" % secure)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
 
             if route == "/api/auth/gmail/start":
                 if not self._authed():
@@ -1419,6 +1395,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 clean = [{"label": str(k.get("label", ""))[:60], "query": str(k.get("query", ""))[:300]}
                          for k in keywords if isinstance(k, dict) and k.get("query")]
                 return self._send(200, gmail_set_keywords(user_id, clean))
+
+            if route == "/api/gmail/confirm":
+                body = self._json_body()
+                query = str(body.get("query", ""))
+                balance = str(body.get("balance", ""))
+                if not query or not balance:
+                    return self._send(400, {"error": "query and balance required"})
+                return self._send(200, gmail_confirm_balance(user_id, query, balance))
 
             if route == "/api/gmail/fetch":
                 return self._send(200, gmail_fetch(user_id))
