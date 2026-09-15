@@ -133,6 +133,11 @@
     <span class="label">Connect Telegram</span>
     <span class="state" id="tgState"></span>
   </a>
+  <a class="mini-card" href="/gmail" title="Read a balance figure out of bank/e-wallet statement emails you point it at. Read-only, never sends or deletes anything.">
+    <span class="ic">📧</span>
+    <span class="label">Connect Gmail</span>
+    <span class="state" id="gmailState"></span>
+  </a>
 </div>
 <main>
   <div class="wrap">
@@ -150,11 +155,6 @@
         <span class="ic">🏦</span>
         <h2>Assets</h2>
         <p>Your account balances — total assets, cash, market value, buying power. Read-only, local version only.</p>
-      </a>
-      <a class="card" href="/gmail">
-        <span class="ic">📧</span>
-        <h2>Connect Gmail</h2>
-        <p>Read a balance figure out of bank/e-wallet statement emails you point it at. Read-only, never sends or deletes anything.</p>
       </a>
       <div class="card soon">
         <span class="ic">✦</span>
@@ -298,6 +298,13 @@ fetch('/api/whoami').then(function(r){ return r.json(); }).then(function(d){
 fetch('/api/telegram/status').then(function(r){ return r.json(); }).then(function(d){
   if (!d.connected) return;
   var el = document.getElementById('tgState');
+  el.classList.add('ok');
+  el.textContent = '✓ Connected';
+}).catch(function(){});
+
+fetch('/api/gmail/status').then(function(r){ return r.json(); }).then(function(d){
+  if (!d.connected) return;
+  var el = document.getElementById('gmailState');
   el.classList.add('ok');
   el.textContent = '✓ Connected';
 }).catch(function(){});
