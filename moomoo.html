@@ -182,6 +182,38 @@ function renderConnected(){
   const a2 = el('a', 'btn', 'Open Assets'); a2.href = '/assets';
   links.append(a1, a2);
   panel.appendChild(links);
+
+  const auto = el('div');
+  auto.style.marginTop = '20px';
+  auto.style.paddingTop = '18px';
+  auto.style.borderTop = '1px solid var(--line)';
+  const label = el('label');
+  label.style.display = 'flex';
+  label.style.alignItems = 'center';
+  label.style.gap = '8px';
+  label.style.cursor = 'pointer';
+  label.style.fontSize = '12.5px';
+  label.style.color = 'var(--fg2)';
+  const cb = el('input');
+  cb.type = 'checkbox';
+  label.append(cb, document.createTextNode('Start OpenD automatically when Windows starts'));
+  auto.appendChild(label);
+  const note = el('div');
+  note.style.color = 'var(--fg3)';
+  note.style.fontSize = '11px';
+  note.style.marginTop = '6px';
+  note.textContent = 'Windows will still ask for a permission prompt at each login — OpenD needs admin rights to run, nothing can silence that.';
+  auto.appendChild(note);
+  panel.appendChild(auto);
+
+  fetch('/api/opend/autostart').then(r => r.json()).then(s => { cb.checked = !!s.enabled; });
+  cb.addEventListener('change', () => {
+    cb.disabled = true;
+    fetch('/api/opend/autostart', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: cb.checked })
+    }).then(r => r.json()).then(s => { cb.checked = !!s.enabled; cb.disabled = false; });
+  });
 }
 
 function renderSelfHostGuide(){

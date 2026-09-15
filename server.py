@@ -558,6 +558,43 @@ def _opend_gui_running():
         return False
 
 
+# Windows Startup folder shortcut -- lets OpenD launch itself the moment you
+# log into Windows, instead of needing to be relaunched by hand every time.
+# Windows will still show its own permission prompt each login (OpenD needs
+# admin rights to run at all -- see the "runas" launch above); nothing here
+# can silence that, it's inherent to the program requiring elevation.
+def _opend_autostart_link():
+    startup = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows",
+                            "Start Menu", "Programs", "Startup")
+    return os.path.join(startup, "moomoo OpenD.lnk")
+
+
+def opend_autostart_enabled():
+    return os.path.isfile(_opend_autostart_link())
+
+
+def set_opend_autostart(enabled):
+    link = _opend_autostart_link()
+    if not enabled:
+        try:
+            os.remove(link)
+        except OSError:
+            pass
+        return {"enabled": False}
+    exe = _opend_gui_exe_path()
+    if not exe:
+        return {"enabled": False, "error": "Connect moomoo at least once first, so OpenD is downloaded."}
+    try:
+        import subprocess
+        ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('%s'); "
+              "$s.TargetPath='%s'; $s.WorkingDirectory='%s'; $s.Save()"
+              % (link.replace("'", "''"), exe.replace("'", "''"), os.path.dirname(exe).replace("'", "''")))
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, timeout=15, check=True)
+        return {"enabled": True}
+    except Exception as e:
+        return {"enabled": False, "error": str(e)}
+
+
 def _run_opend_setup():
     global _opend_setup_state
     try:
@@ -1277,6 +1314,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._send(403, {"error": "local only"})
                 return self._send(200, {"connected": _opend_port_open()})
 
+            if route == "/api/opend/autostart":
+                if not _is_local_run():
+                    return self._send(403, {"error": "local only"})
+                return self._send(200, {"enabled": opend_autostart_enabled()})
+
             if route == "/api/telegram/status":
                 return self._send(200, telegram_status(self._current_user() or "local"))
 
@@ -1369,6 +1411,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if route == "/api/gmail/fetch":
                 return self._send(200, gmail_fetch(user_id))
+
+            if route == "/api/opend/autostart":
+                if not _is_local_run():
+                    return self._send(403, {"error": "local only"})
+                body = self._json_body()
+                return self._send(200, set_opend_autostart(bool(body.get("enabled"))))
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
