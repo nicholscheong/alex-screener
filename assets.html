@@ -65,6 +65,7 @@
   <h1>Assets<span class="badge-local">Local only</span></h1>
   <p class="sub">Your real moomoo account balances, read directly from your own machine via moomoo's official OpenD gateway.</p>
   <div id="body"><div class="load">Connecting…</div></div>
+  <div id="gmailBody"></div>
 </main>
 
 <script>
@@ -137,6 +138,30 @@ async function load(){
   }
 }
 load();
+
+async function loadGmail(){
+  const wrap = document.getElementById('gmailBody');
+  try {
+    const r = await fetch('/api/gmail/status');
+    const d = await r.json();
+    if (!d.connected || !(d.balances || []).length) return;
+    wrap.innerHTML = '';
+    const acc = el('div', 'acc');
+    const head = el('div', 'acc-head');
+    head.appendChild(el('h3', null, 'From Gmail'));
+    acc.appendChild(head);
+    const cards = el('div', 'cards');
+    d.balances.forEach(b => {
+      const c = el('div', 'card');
+      c.appendChild(el('div', 'k', b.label || b.query));
+      c.appendChild(el('div', 'v', b.balance ? ('RM ' + fmtNum(parseFloat(b.balance), 2)) : '–'));
+      cards.appendChild(c);
+    });
+    acc.appendChild(cards);
+    wrap.appendChild(acc);
+  } catch(e){}
+}
+loadGmail();
 </script>
 </body>
 </html>

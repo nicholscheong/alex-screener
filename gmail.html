@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.ico">
+<title>Alex</title>
+<style>
+  :root{
+    --bg:#0a0c11; --bg1:#0e1116; --bg2:#12151c; --bg3:#181c25;
+    --line:#1f2531; --line-strong:#2b3340;
+    --fg:#e8ebf1; --fg2:#98a1b3; --fg3:#5f6a7d;
+    --accent:#5b93f6; --accent-fg:#d7e6ff; --accent-bg:#16233c; --accent-line:#31496f;
+    --r-sm:4px; --r:6px; --r-lg:10px;
+    --font:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--fg);font:13px/1.5 var(--font);-webkit-font-smoothing:antialiased;
+       display:flex;flex-direction:column;min-height:100%}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 20px;background:var(--bg1);border-bottom:1px solid var(--line);flex:none}
+  .logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+  .logo::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 12px -1px var(--accent)}
+  .grow{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;background:var(--bg3);border:1px solid var(--line);color:var(--fg2);border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;text-decoration:none}
+  .btn:hover{color:var(--fg);border-color:var(--line-strong);background:var(--bg2)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn-primary{height:36px;padding:0 18px;background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+
+  main{flex:1;padding:32px 24px;max-width:680px;width:100%;margin:0 auto}
+  h1{margin:0 0 6px;font-size:21px;font-weight:650;letter-spacing:-.01em}
+  .sub{margin:0 0 26px;color:var(--fg2);font-size:13px;line-height:1.5}
+  .badge-local{display:inline-flex;align-items:center;gap:5px;font:600 9.5px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);border:1px solid var(--line);border-radius:999px;padding:3px 9px;margin-left:8px;vertical-align:2px}
+
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;margin-bottom:20px}
+  .panel h2{margin:0 0 12px;font-size:14px}
+  .scope-list{margin:0 0 20px;padding-left:20px;color:var(--fg2);line-height:1.8;font-size:12.5px}
+  .scope-list b{color:var(--fg)}
+
+  .err{background:rgba(240,95,107,.14);border:1px solid rgba(240,95,107,.3);color:#f0a0a8;
+       border-radius:var(--r);padding:10px 12px;font-size:12px;margin-top:14px;white-space:pre-wrap;word-break:break-word}
+
+  .connected-box{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .dot-ok{width:8px;height:8px;border-radius:50%;background:#3ecf8e;box-shadow:0 0 8px #3ecf8e;flex:none}
+  .connected-box .msg{font-weight:600;font-size:14px}
+  .connected-box .grow{flex:1}
+
+  .kw-row{display:flex;gap:8px;margin-bottom:10px}
+  .kw-row input{min-width:0;height:34px;padding:0 10px;background:var(--bg1);border:1px solid var(--line);border-radius:var(--r);color:var(--fg);font-size:12.5px;font-family:var(--font)}
+  .kw-row input.label{flex:0 0 160px}
+  .kw-row input.query{flex:1;font-family:var(--mono)}
+  .kw-row button{flex:none;width:34px;height:34px;background:var(--bg3);border:1px solid var(--line);border-radius:var(--r);color:var(--fg3);cursor:pointer}
+  .kw-row button:hover{color:#f0a0a8;border-color:rgba(240,95,107,.3)}
+  .kw-actions{display:flex;gap:10px;margin-top:14px}
+  .hint{color:var(--fg3);font-size:11.5px;margin:-4px 0 14px}
+  .hint code{background:var(--bg3);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 5px;font:11px var(--mono)}
+
+  .balances{margin-top:6px}
+  .bal-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line2,var(--line))}
+  .bal-row:first-child{border-top:none}
+  .bal-label{font-weight:600}
+  .bal-sub{color:var(--fg3);font-size:11px;margin-top:2px}
+  .bal-value{font-size:16px;font-weight:650;font-family:var(--mono)}
+  .bal-value.na{color:var(--fg3);font-size:12px;font-weight:500;font-family:var(--font)}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/"><span>Alex</span></a>
+  <div class="grow"></div>
+  <a class="btn" href="/assets">Assets</a>
+  <a class="btn" href="/screener">Stock Screener</a>
+</header>
+<main>
+  <h1>Connect Gmail<span class="badge-local">Read-only</span></h1>
+  <p class="sub">Search your own Gmail for bank or e-wallet statement emails you specify, and read a balance figure out of them into Assets. Nothing here ever sends, edits, or deletes anything in your inbox.</p>
+
+  <div class="panel" id="panel">
+    <div>Checking…</div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const panel = document.getElementById('panel');
+function el(t, c, txt){ const e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; }
+const params = new URLSearchParams(window.location.search);
+
+function renderConsent(){
+  panel.innerHTML = '';
+  panel.appendChild(el('h2', null, 'What this reads'));
+  const list = el('ul', 'scope-list');
+  [
+    'Only searches Gmail for messages matching keywords <b>you</b> set below — nothing else in your inbox is ever touched.',
+    'Only reads the matched message’s text and PDF attachments, looking for a balance figure.',
+    'Never sends, replies to, labels, archives, or deletes anything.',
+    'You can disconnect at any time, which deletes the stored access here immediately.'
+  ].forEach(t => { const li = el('li'); li.innerHTML = t; list.appendChild(li); });
+  panel.appendChild(list);
+
+  const btn = el('a', 'btn-primary', 'Connect Gmail');
+  btn.href = '/api/auth/gmail/start';
+  panel.appendChild(btn);
+
+  const err = params.get('error');
+  if (err){
+    const e = el('div', 'err', err);
+    panel.appendChild(e);
+  }
+}
+
+function renderConnected(status){
+  panel.innerHTML = '';
+  const box = el('div', 'connected-box');
+  box.appendChild(el('span', 'dot-ok'));
+  box.appendChild(el('span', 'msg', 'Connected as ' + (status.email || '')));
+  box.appendChild(el('span', 'grow'));
+  const disconnectBtn = el('button', 'btn', 'Disconnect');
+  disconnectBtn.addEventListener('click', () => {
+    fetch('/api/gmail/disconnect', { method: 'POST' }).then(() => load());
+  });
+  box.appendChild(disconnectBtn);
+  panel.appendChild(box);
+
+  panel.appendChild(el('h2', null, 'Keywords'));
+  const hint = el('div', 'hint');
+  hint.innerHTML = 'One row per account. Query uses normal Gmail search syntax, e.g. <code>from:estatement@publicbank.com.my</code> or <code>subject:"Touch &#39;n Go" balance</code>.';
+  panel.appendChild(hint);
+
+  const rows = el('div', 'kw-rows');
+  panel.appendChild(rows);
+
+  function addRow(label, query){
+    const row = el('div', 'kw-row');
+    const l = el('input', 'label'); l.placeholder = 'Label, e.g. Public Bank'; l.value = label || '';
+    const q = el('input', 'query'); q.placeholder = 'Gmail search query'; q.value = query || '';
+    const del = el('button', null, '✕');
+    del.addEventListener('click', () => row.remove());
+    row.append(l, q, del);
+    rows.appendChild(row);
+  }
+  (status.keywords || []).forEach(k => addRow(k.label, k.query));
+  if (!(status.keywords || []).length) addRow('', '');
+
+  const actions = el('div', 'kw-actions');
+  const addBtn = el('button', 'btn', '+ Add row');
+  addBtn.addEventListener('click', () => addRow('', ''));
+  const saveBtn = el('button', 'btn-primary', 'Save & Fetch');
+  saveBtn.addEventListener('click', () => {
+    const keywords = Array.from(rows.children).map(row => ({
+      label: row.querySelector('.label').value.trim(),
+      query: row.querySelector('.query').value.trim(),
+    })).filter(k => k.query);
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    fetch('/api/gmail/keywords', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords })
+    }).then(() => fetch('/api/gmail/fetch', { method: 'POST' }))
+      .then(r => r.json())
+      .then(d => { saveBtn.disabled = false; saveBtn.textContent = 'Save & Fetch'; renderBalances(d.balances || []); })
+      .catch(() => { saveBtn.disabled = false; saveBtn.textContent = 'Save & Fetch'; });
+  });
+  actions.append(addBtn, saveBtn);
+  panel.appendChild(actions);
+
+  const balWrap = el('div');
+  balWrap.id = 'balWrap';
+  panel.appendChild(balWrap);
+  renderBalances(status.balances || []);
+}
+
+function renderBalances(balances){
+  const wrap = document.getElementById('balWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!balances.length) return;
+  wrap.appendChild(el('h2', null, 'Latest balances'));
+  const box = el('div', 'balances');
+  balances.forEach(b => {
+    const row = el('div', 'bal-row');
+    const left = el('div');
+    left.appendChild(el('div', 'bal-label', b.label || b.query));
+    left.appendChild(el('div', 'bal-sub', b.error ? b.error : ('From: ' + (b.subject || ''))));
+    row.appendChild(left);
+    if (b.balance) row.appendChild(el('div', 'bal-value', 'RM ' + b.balance));
+    else row.appendChild(el('div', 'bal-value na', 'Not found'));
+    box.appendChild(row);
+  });
+  wrap.appendChild(box);
+}
+
+function load(){
+  fetch('/api/gmail/status').then(r => r.json()).then(status => {
+    if (status.connected) renderConnected(status);
+    else renderConsent();
+  }).catch(() => renderConsent());
+}
+load();
+</script>
+</body>
+</html>

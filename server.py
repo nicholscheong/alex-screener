@@ -20,6 +20,8 @@ import secrets
 import threading
 import gzip
 import io
+import re
+import base64
 import os
 import sys
 import webbrowser
@@ -773,6 +775,235 @@ def send_telegram_message(user_id, text):
 
 
 # ----------------------------------------------------------------------------
+# Gmail statement reader — opt-in, per-user, read-only.
+#
+# Lets Alex search your own Gmail for bank/e-wallet statement emails you
+# specify by keyword, pull the PDF attachment, and try to read a balance
+# figure out of it. This only ever reads messages matching your own search
+# query — it never sends, modifies, or deletes anything, and never looks at
+# messages outside what you searched for.
+#
+# This is a separate, opt-in OAuth grant from signing in (gmail.readonly is
+# a far more sensitive scope than the openid/email/profile used to sign in),
+# and Google classifies it as a "restricted" scope: production apps need to
+# pass Google's CASA security review before the public can grant it. Until
+# then, only Google accounts added as test users in Cloud Console can connect
+# this — everyone else just won't see it work, which is expected during that
+# window, not a bug.
+try:
+    import pypdf
+    _HAS_PYPDF = True
+except ImportError:
+    _HAS_PYPDF = False
+
+_GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+_GMAIL_STORE_PATH = os.path.join(_DATA_DIR, "gmail.json")
+_gmail_lock = threading.Lock()
+
+_BALANCE_RE = re.compile(
+    r"(?:ending\s*balance|available\s*balance|current\s*balance|closing\s*balance|"
+    r"balance\s*b\W?f|结余|餘額|余额)"
+    r"[^\d\-]{0,40}(?:RM|MYR|\$)?\s*([\d,]+\.\d{2})",
+    re.IGNORECASE,
+)
+
+
+def _gmail_load_all():
+    try:
+        with open(_GMAIL_STORE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _gmail_save_all(data):
+    with open(_GMAIL_STORE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _gmail_auth_url(redirect_uri, state):
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": _GMAIL_SCOPE + " openid email",
+        "state": state,
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+
+
+def _gmail_exchange_code(code, redirect_uri):
+    data = urllib.parse.urlencode({
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }).encode("utf-8")
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def _gmail_refresh_token(refresh_token):
+    data = urllib.parse.urlencode({
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }).encode("utf-8")
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def _gmail_access_token(user_id):
+    """A valid access token for this user, refreshing if needed. Raises if not connected."""
+    entry = _gmail_load_all().get(user_id)
+    if not entry or not entry.get("refresh_token"):
+        raise RuntimeError("Gmail is not connected.")
+    if entry.get("access_token") and entry.get("expiresAt", 0) > time.time() + 60:
+        return entry["access_token"]
+    tok = _gmail_refresh_token(entry["refresh_token"])
+    if "access_token" not in tok:
+        raise RuntimeError(tok.get("error_description") or "Could not refresh Gmail access.")
+    with _gmail_lock:
+        all_data = _gmail_load_all()
+        if user_id in all_data:
+            all_data[user_id]["access_token"] = tok["access_token"]
+            all_data[user_id]["expiresAt"] = time.time() + int(tok.get("expires_in", 3600))
+            _gmail_save_all(all_data)
+    return tok["access_token"]
+
+
+def _gmail_api_get(access_token, url):
+    req = urllib.request.Request(url, headers={"Authorization": "Bearer " + access_token, "User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def gmail_status(user_id):
+    entry = _gmail_load_all().get(user_id)
+    if not entry or not entry.get("refresh_token"):
+        return {"connected": False}
+    return {"connected": True, "email": entry.get("email"),
+            "keywords": entry.get("keywords", []), "balances": entry.get("balances", [])}
+
+
+def gmail_disconnect(user_id):
+    with _gmail_lock:
+        all_data = _gmail_load_all()
+        if user_id in all_data:
+            del all_data[user_id]
+            _gmail_save_all(all_data)
+    return {"connected": False}
+
+
+def gmail_set_keywords(user_id, keywords):
+    with _gmail_lock:
+        all_data = _gmail_load_all()
+        if user_id not in all_data:
+            return {"ok": False, "error": "Gmail is not connected."}
+        all_data[user_id]["keywords"] = keywords
+        _gmail_save_all(all_data)
+    return {"ok": True}
+
+
+def _extract_balance_from_text(text):
+    m = _BALANCE_RE.search(text)
+    return m.group(1).replace(",", "") if m else None
+
+
+def _pdf_text(raw_bytes):
+    if not _HAS_PYPDF:
+        return ""
+    reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
+def _walk_gmail_parts(payload):
+    parts = []
+
+    def walk(p):
+        parts.append(p)
+        for sub in p.get("parts") or []:
+            walk(sub)
+    walk(payload or {})
+    return parts
+
+
+def _b64url_decode(data):
+    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+
+
+def gmail_fetch(user_id):
+    entry = _gmail_load_all().get(user_id)
+    if not entry:
+        return {"ok": False, "error": "Gmail is not connected."}
+    keywords = entry.get("keywords") or []
+    if not keywords:
+        return {"ok": False, "error": "No keywords set yet."}
+    if not _HAS_PYPDF:
+        return {"ok": False, "error": "pypdf is not installed. Run:  pip install pypdf"}
+    try:
+        access_token = _gmail_access_token(user_id)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    results = []
+    for kw in keywords:
+        label, query = kw.get("label", ""), kw.get("query", "")
+        try:
+            search = _gmail_api_get(access_token,
+                "https://www.googleapis.com/gmail/v1/users/me/messages?" +
+                urllib.parse.urlencode({"q": query, "maxResults": 5}))
+            msg_ids = [m["id"] for m in (search.get("messages") or [])]
+            found_balance, found_subject = None, None
+            for mid in msg_ids:
+                msg = _gmail_api_get(access_token,
+                    "https://www.googleapis.com/gmail/v1/users/me/messages/%s?format=full" % mid)
+                subject = ""
+                for h in (msg.get("payload", {}).get("headers") or []):
+                    if h.get("name") == "Subject":
+                        subject = h.get("value", "")
+                balance = None
+                for part in _walk_gmail_parts(msg.get("payload")):
+                    mime = part.get("mimeType", "")
+                    body = part.get("body", {})
+                    if mime == "application/pdf" and body.get("attachmentId"):
+                        att = _gmail_api_get(access_token,
+                            "https://www.googleapis.com/gmail/v1/users/me/messages/%s/attachments/%s"
+                            % (mid, body["attachmentId"]))
+                        if att.get("data"):
+                            balance = _extract_balance_from_text(_pdf_text(_b64url_decode(att["data"])))
+                    elif mime.startswith("text/") and body.get("data") and not balance:
+                        text = _b64url_decode(body["data"]).decode("utf-8", "replace")
+                        balance = _extract_balance_from_text(text)
+                    if balance:
+                        break
+                if balance:
+                    found_balance, found_subject = balance, subject
+                    break
+            results.append({
+                "label": label, "query": query, "balance": found_balance, "subject": found_subject,
+                "checkedAt": int(time.time()),
+                "error": None if found_balance else "No balance found in recent matching emails.",
+            })
+        except Exception as e:
+            results.append({"label": label, "query": query, "balance": None,
+                             "error": str(e), "checkedAt": int(time.time())})
+
+    with _gmail_lock:
+        all_data = _gmail_load_all()
+        if user_id in all_data:
+            all_data[user_id]["balances"] = results
+            _gmail_save_all(all_data)
+    return {"ok": True, "balances": results}
+
+
+# ----------------------------------------------------------------------------
 # HTTP handler
 # ----------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -907,6 +1138,69 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
+
+            if route == "/api/auth/gmail/start":
+                if not self._authed():
+                    return
+                if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+                    self.send_response(302)
+                    self.send_header("Location", "/gmail?error=" + urllib.parse.quote("Google sign-in isn't configured."))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                state = secrets.token_urlsafe(24)
+                redirect_uri = self._base_url() + "/api/auth/gmail/callback"
+                self.send_response(302)
+                self.send_header("Location", _gmail_auth_url(redirect_uri, state))
+                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+                self.send_header("Set-Cookie", "alex_gmail_state=%s; Path=/; HttpOnly; SameSite=Lax; Max-Age=600%s" % (state, secure))
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if route == "/api/auth/gmail/callback":
+                if not self._authed():
+                    return
+                user_id = self._current_user() or "local"
+
+                def _gfail(msg):
+                    self.send_response(302)
+                    self.send_header("Location", "/gmail?error=" + urllib.parse.quote(msg))
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                code = (q.get("code") or [""])[0]
+                state = (q.get("state") or [""])[0]
+                expected_state = self._get_cookie("alex_gmail_state")
+                if not code or not state or not expected_state or not hmac.compare_digest(state, expected_state):
+                    return _gfail("Gmail connect failed (state mismatch) — please try again.")
+                try:
+                    redirect_uri = self._base_url() + "/api/auth/gmail/callback"
+                    tokens = _gmail_exchange_code(code, redirect_uri)
+                    if "refresh_token" not in tokens:
+                        return _gfail("Google didn't grant offline access — disconnect any prior Alex grant at "
+                                      "https://myaccount.google.com/permissions and try again.")
+                    info = _google_userinfo(tokens["access_token"])
+                    with _gmail_lock:
+                        all_data = _gmail_load_all()
+                        all_data[user_id] = {
+                            "email": info.get("email"),
+                            "refresh_token": tokens["refresh_token"],
+                            "access_token": tokens.get("access_token"),
+                            "expiresAt": time.time() + int(tokens.get("expires_in", 3600)),
+                            "keywords": (all_data.get(user_id) or {}).get("keywords", []),
+                            "balances": (all_data.get(user_id) or {}).get("balances", []),
+                        }
+                        _gmail_save_all(all_data)
+                except Exception as e:
+                    return _gfail("Gmail connect failed: %s" % e)
+                secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+                self.send_response(302)
+                self.send_header("Location", "/gmail")
+                self.send_header("Set-Cookie", "alex_gmail_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0%s" % secure)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
             if route in ("/", "/home.html"):
                 return self._file("home.html", "text/html; charset=utf-8")
             if route in ("/portfolio", "/portfolio.html"):
@@ -917,6 +1211,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file("telegram.html", "text/html; charset=utf-8")
             if route in ("/moomoo", "/moomoo.html"):
                 return self._file("moomoo.html", "text/html; charset=utf-8")
+            if route in ("/gmail", "/gmail.html"):
+                return self._file("gmail.html", "text/html; charset=utf-8")
             if route in ("/index.html", "/screener", "/screener.html"):
                 return self._file("index.html", "text/html; charset=utf-8")
             if route == "/universe.json":
@@ -983,6 +1279,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if route == "/api/telegram/status":
                 return self._send(200, telegram_status(self._current_user() or "local"))
+
+            if route == "/api/gmail/status":
+                return self._send(200, gmail_status(self._current_user() or "local"))
 
             if route == "/api/whoami":
                 user = self._current_user()
@@ -1055,6 +1354,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not text:
                     return self._send(400, {"error": "text required"})
                 return self._send(200, send_telegram_message(user_id, text))
+
+            if route == "/api/gmail/disconnect":
+                return self._send(200, gmail_disconnect(user_id))
+
+            if route == "/api/gmail/keywords":
+                body = self._json_body()
+                keywords = body.get("keywords")
+                if not isinstance(keywords, list):
+                    return self._send(400, {"error": "keywords must be a list"})
+                clean = [{"label": str(k.get("label", ""))[:60], "query": str(k.get("query", ""))[:300]}
+                         for k in keywords if isinstance(k, dict) and k.get("query")]
+                return self._send(200, gmail_set_keywords(user_id, clean))
+
+            if route == "/api/gmail/fetch":
+                return self._send(200, gmail_fetch(user_id))
 
             return self._send(404, {"error": "unknown route"})
         except BrokenPipeError:
