@@ -790,6 +790,31 @@ def send_telegram_message(user_id, text):
         return {"ok": False, "error": str(e)}
 
 
+def send_telegram_trade_plan(user_id, text, symbol):
+    """Send a research plan with a quote-page launcher, never an order action."""
+    cfg = _tg_load_all().get(user_id) or {}
+    if not cfg.get("token"):
+        return {"ok": False, "error": "Telegram is not connected."}
+    symbol = re.sub(r"[^A-Za-z0-9.\-]", "", str(symbol or "").upper())[:20]
+    if not symbol:
+        return {"ok": False, "error": "valid symbol required"}
+    try:
+        params = {
+            "chat_id": cfg["chatId"],
+            "text": text,
+            "reply_markup": json.dumps({"inline_keyboard": [[{
+                "text": "Open in moomoo",
+                "url": "https://www.moomoo.com/stock/%s-US" % urllib.parse.quote(symbol, safe="")
+            }]]})
+        }
+        r = _tg_call(cfg["token"], "sendMessage", params)
+        if not r.get("ok"):
+            return {"ok": False, "error": r.get("description") or "send failed"}
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 # ----------------------------------------------------------------------------
 # Gmail statement reader — opt-in, per-user, read-only.
 #
@@ -1383,6 +1408,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if not text:
                     return self._send(400, {"error": "text required"})
                 return self._send(200, send_telegram_message(user_id, text))
+
+            if route == "/api/telegram/trade-plan":
+                body = self._json_body()
+                text = (body.get("text") or "").strip()
+                if not text:
+                    return self._send(400, {"error": "text required"})
+                return self._send(200, send_telegram_trade_plan(user_id, text, body.get("symbol")))
 
             if route == "/api/gmail/disconnect":
                 return self._send(200, gmail_disconnect(user_id))

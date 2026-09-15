@@ -305,6 +305,11 @@
   #nameModal input[type=text]{width:100%;height:36px;background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:var(--r);padding:0 11px;font:13px var(--font);margin-top:10px}
   #nameModal input[type=text]:focus{border-color:var(--accent-line);background:var(--bg2);outline:none}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  #tradePlanModal .sm-card{width:min(480px,92vw)}
+  .plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .plan-grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12px}
+  .plan-grid input{height:36px;background:var(--bg3);border:1px solid var(--line);color:var(--fg);border-radius:var(--r);padding:0 10px;font:13px var(--font)}
+  .plan-note{margin-top:15px;padding:10px 11px;border:1px solid var(--line);border-radius:var(--r);color:var(--muted);font-size:12px;line-height:1.55;background:var(--bg3)}
 </style>
 </head>
 <body>
@@ -2758,6 +2763,108 @@ async function init(){
   loadCharts().then(() => { render(); });          // technicals in background
 }
 init();
+</script>
+<div id="tradePlanModal" class="modal" hidden>
+  <div class="sm-card">
+    <button class="close" id="tradePlanClose">×</button>
+    <h3>Telegram trade plans</h3>
+    <div class="sub">ALEX calculates an informational entry, TP and SL from rules you set. It sends research alerts only — never an order.</div>
+    <div class="plan-grid">
+      <label>Stop-loss below reference price (%)<input type="number" id="planStopPct" min="0.1" max="50" step="0.1" value="3"></label>
+      <label>Take-profit risk multiple (R)<input type="number" id="planRewardR" min="0.1" max="20" step="0.1" value="2"></label>
+      <label>Number of matching stocks to send<input type="number" id="planMaxRows" min="1" max="10" step="1" value="5"></label>
+    </div>
+    <div class="plan-note" id="planPreview">Reference price × (1 − stop %) = SL. TP uses your risk multiple. You will review all values in moomoo before placing any order.</div>
+    <div class="modal-actions">
+      <button class="btn" id="tradePlanCancel">Cancel</button>
+      <button class="btn-primary" id="tradePlanSend">Send to Telegram</button>
+    </div>
+  </div>
+</div>
+<script>
+// Telegram alerts are research plans. The values below are user-configured
+// arithmetic only; they are not trading recommendations or executable orders.
+const DEFAULT_TELEGRAM_PLAN = { stopPct: 3, rewardR: 2, maxRows: 5 };
+let telegramPlan = Object.assign({}, DEFAULT_TELEGRAM_PLAN, LS.get('telegramTradePlan', {}));
+
+function closeTradePlan(){ $('#tradePlanModal').hidden = true; }
+function readTradePlan(){
+  const stopPct = Number($('#planStopPct').value);
+  const rewardR = Number($('#planRewardR').value);
+  const maxRows = Math.round(Number($('#planMaxRows').value));
+  if (!(stopPct > 0 && stopPct <= 50 && rewardR > 0 && rewardR <= 20 && maxRows >= 1 && maxRows <= 10)) return null;
+  telegramPlan = { stopPct, rewardR, maxRows };
+  LS.set('telegramTradePlan', telegramPlan);
+  return telegramPlan;
+}
+function updateTradePlanPreview(){
+  const p = readTradePlan();
+  $('#planPreview').textContent = p
+    ? `SL = reference price − ${p.stopPct}% · TP = reference price + ${p.rewardR}R. These are your saved rules, not ALEX recommendations.`
+    : 'Use a stop between 0.1% and 50%, an R multiple between 0.1 and 20, and send 1–10 stocks.';
+}
+function openTradePlan(){
+  const rows = currentRows();
+  if (!rows.length){
+    const btn = $('#sendTelegram'), original = btn.textContent;
+    btn.textContent = 'No results'; setTimeout(() => btn.textContent = original, 1800); return;
+  }
+  $('#planStopPct').value = telegramPlan.stopPct;
+  $('#planRewardR').value = telegramPlan.rewardR;
+  $('#planMaxRows').value = telegramPlan.maxRows;
+  updateTradePlanPreview();
+  $('#tradePlanModal').hidden = false;
+}
+async function sendTradePlans(){
+  const plan = readTradePlan();
+  const rows = currentRows().filter(r => Number(r.price) > 0).slice(0, plan ? plan.maxRows : 0);
+  if (!plan || !rows.length) return;
+  const sendBtn = $('#tradePlanSend');
+  sendBtn.disabled = true; sendBtn.textContent = 'Sending...';
+  try {
+    let sent = 0;
+    for (const row of rows){
+      const entry = Number(row.price);
+      const risk = entry * plan.stopPct / 100;
+      const sl = entry - risk;
+      const tp = entry + risk * plan.rewardR;
+      const text = [
+        `ALEX TRADE PLAN · ${row.symbol}`,
+        row.name || row.symbol,
+        '',
+        `Reference price: $${nf(entry, 2)}`,
+        `Take profit: $${nf(tp, 2)}  (+${nf(plan.stopPct * plan.rewardR, 2)}%)`,
+        `Stop loss: $${nf(sl, 2)}  (−${nf(plan.stopPct, 2)}%)`,
+        `Risk / reward: 1 : ${nf(plan.rewardR, 2)}`,
+        row.chgPct != null ? `Today: ${pct(row.chgPct)}` : '',
+        '',
+        'For review only — this is not an order. Verify symbol, price, quantity, TP and SL in moomoo before you buy or sell.'
+      ].filter(Boolean).join('\n');
+      const response = await fetch('/api/telegram/trade-plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, symbol: row.symbol })
+      });
+      const result = await response.json();
+      if (!result.ok) throw new Error(result.error || 'Telegram send failed');
+      sent++;
+    }
+    closeTradePlan();
+    const btn = $('#sendTelegram'), original = btn.textContent;
+    btn.textContent = `Sent ${sent} plan${sent === 1 ? '' : 's'}`;
+    setTimeout(() => btn.textContent = original, 2400);
+  } catch (err) {
+    sendBtn.disabled = false; sendBtn.textContent = err.message || 'Request failed';
+    setTimeout(() => sendBtn.textContent = 'Send to Telegram', 2600);
+    return;
+  }
+  sendBtn.disabled = false; sendBtn.textContent = 'Send to Telegram';
+}
+
+$('#sendTelegram').onclick = openTradePlan;
+$('#tradePlanClose').onclick = closeTradePlan;
+$('#tradePlanCancel').onclick = closeTradePlan;
+$('#tradePlanSend').onclick = sendTradePlans;
+['planStopPct', 'planRewardR', 'planMaxRows'].forEach(id => $('#' + id).addEventListener('input', updateTradePlanPreview));
 </script>
 </body>
 </html>
